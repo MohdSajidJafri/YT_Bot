@@ -2,7 +2,6 @@ name: Daily YouTube Short
 
 on:
   schedule:
-    # Every day at 10:00 UTC (adjust to your timezone / best upload time)
     - cron: "0 10 * * *"
   workflow_dispatch:
     inputs:
