@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
 import sys
 import time
 from datetime import datetime, timezone
@@ -53,10 +54,18 @@ def main() -> None:
     img_dir = run_dir / "images"
     img_dir.mkdir(parents=True, exist_ok=True)
 
+    # Pick a topic: user-provided takes priority, else random from the preset pool.
+    topic_hint = args.topic.strip() or None
+    if not topic_hint:
+        pool = preset.get("topic_pool") or []
+        if pool:
+            topic_hint = random.choice(pool)
+            print(f"🎲 Random topic from pool: {topic_hint!r}")
+
     # ── 1. Script via Groq ───────────────────────────────────────────
     print("① Groq: generating script…")
     pack = generate_short_pack(
-        preset, topic_hint=args.topic or None, channel_id=args.channel,
+        preset, topic_hint=topic_hint, channel_id=args.channel,
     )
     (run_dir / "script.json").write_text(json.dumps(pack, indent=2), encoding="utf-8")
 
@@ -109,7 +118,8 @@ def main() -> None:
     print(f"   → {video_path}")
 
     # ── 6. History ───────────────────────────────────────────────────
-    save_title(args.channel, title)
+    summary = " ".join(narration.split()[:25]) + "…"
+    save_title(args.channel, title, summary)
 
     # ── 7. YouTube upload ────────────────────────────────────────────
     if args.upload:

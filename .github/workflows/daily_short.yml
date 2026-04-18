@@ -46,10 +46,12 @@ jobs:
 
       # Restore story history from previous runs (prevents repeats)
       - name: Restore history cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: output/history/
-          key: story-history-${{ github.event.inputs.channel || 'ghost_stories' }}
+          key: story-history-${{ github.event.inputs.channel || 'ghost_stories' }}-${{ github.run_id }}
+          restore-keys: |
+            story-history-${{ github.event.inputs.channel || 'ghost_stories' }}-
 
       - name: Generate & upload Short
         run: |
