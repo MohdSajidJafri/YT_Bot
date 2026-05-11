@@ -18,6 +18,9 @@ env:
   YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
   YT_CLIENT_SECRET_VALUE: ${{ secrets.YT_CLIENT_SECRET_VALUE }}
   YT_REFRESH_TOKEN_MYTH: ${{ secrets.YT_REFRESH_TOKEN_MYTH }}
+  # Optional: second bhakti channel (same video file uploaded twice).
+  # Set this secret if you want the same Short on another channel.
+  YT_REFRESH_TOKEN_MYTH_2: ${{ secrets.YT_REFRESH_TOKEN_MYTH_2 }}
   YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
 
 jobs:

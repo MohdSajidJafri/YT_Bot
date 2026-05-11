@@ -141,6 +141,7 @@ def main() -> None:
                 print(f"🎲 Random topic from pool: {topic_hint!r}")
 
     variants = preset.get("variants") or []
+    primary_video_path: Path | None = None
 
     # ── 1. Script via Groq ───────────────────────────────────────────
     print("① Groq: generating script…")
@@ -216,7 +217,7 @@ def main() -> None:
                 yt_token_env=v.get("yt_token_env", "YT_REFRESH_TOKEN"),
             )
     else:
-        _render_and_upload(
+        primary_video_path = _render_and_upload(
             variant_label=preset.get("language", "en"),
             narration=narration,
             title=title,
@@ -240,6 +241,23 @@ def main() -> None:
         from pipeline.myth_topics import commit_myth_topic
 
         commit_myth_topic(args.channel, myth_theme_for_commit, myth_topic_for_commit)
+
+    # Optional second upload: same rendered MP4 to extra channels (e.g. second bhakti channel).
+    # Uses env var names listed in preset["extra_yt_token_envs"].
+    extra_envs = preset.get("extra_yt_token_envs") or []
+    if args.upload and primary_video_path and extra_envs:
+        from pipeline.youtube_upload import upload_short
+
+        for env_name in extra_envs:
+            print(f"⑦ Extra YouTube upload ({env_name})…")
+            vid_extra = upload_short(
+                primary_video_path,
+                history_title,
+                pack.get("youtube_description", ""),
+                privacy_status=args.privacy,
+                refresh_token_env=env_name,
+            )
+            print(f"   Extra channel video: https://www.youtube.com/shorts/{vid_extra}")
 
     print("\n✓ Done.")
 
