@@ -47,6 +47,7 @@ from pipeline.captions import build_srt
 from pipeline.channel_presets import get_preset, list_channel_ids
 from pipeline.edge_tts_synth import synthesize_full
 from pipeline.groq_script import generate_short_pack
+from pipeline.hashtags import append_hashtags
 from pipeline.images import DEFAULT_NEGATIVE, full_visual_prompt, save_scene_image
 from pipeline.render_short import render_vertical_short
 from pipeline.story_history import save_title
@@ -54,6 +55,7 @@ from pipeline.story_history import save_title
 
 def _render_and_upload(
     *,
+    channel_id: str,
     variant_label: str,
     narration: str,
     title: str,
@@ -94,9 +96,11 @@ def _render_and_upload(
 
     if upload:
         from pipeline.youtube_upload import upload_short
+        # Append viral hashtags to the description
+        description_with_tags = append_hashtags(description, channel_id)
         print(f"⑥ YouTube: uploading ({yt_token_env})…")
         vid = upload_short(
-            video_path, title, description,
+            video_path, title, description_with_tags,
             privacy_status=privacy,
             refresh_token_env=yt_token_env,
         )
@@ -202,6 +206,7 @@ def main() -> None:
         for v in variants:
             node = pack["variants"][v["lang"]]
             _render_and_upload(
+                channel_id=args.channel,
                 variant_label=v["label"],
                 narration=node["full_narration"],
                 title=node["youtube_title"],
@@ -218,6 +223,7 @@ def main() -> None:
             )
     else:
         primary_video_path = _render_and_upload(
+            channel_id=args.channel,
             variant_label=preset.get("language", "en"),
             narration=narration,
             title=title,

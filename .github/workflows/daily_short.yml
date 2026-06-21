@@ -1,73 +1,171 @@
+# ────────────────────────────────────────────────────────────
+# Daily YouTube Short — fully automated CI/CD pipeline
+# ────────────────────────────────────────────────────────────
+# Trigger:
+#   - Scheduled: runs every day at 10:00 UTC
+#   - Manual:    via Actions tab → "Run workflow"
+#
+# Secrets required (repo → Settings → Secrets → Actions):
+#   GROQ_API_KEY           Groq LLM
+#   DEAPI_TOKEN            DeAPI.ai image generation
+#   EDGE_TTS_VOICE         (optional) TTS voice override
+#
+#   YouTube OAuth (one per channel):
+#   YT_CLIENT_ID           Shared OAuth client ID
+#   YT_CLIENT_SECRET_VALUE Shared OAuth client secret
+#   YT_REFRESH_TOKEN       Default channel token
+#
+#   Per-channel refresh tokens (for bilingual / multiple channels):
+#   YT_REFRESH_TOKEN_HI    Hindi facts channel
+#   YT_REFRESH_TOKEN_EN    English facts channel
+#   YT_REFRESH_TOKEN_MYTH  Hindi mythology channel
+#   YT_REFRESH_TOKEN_MYTH_2 Backup myth channel
+# ────────────────────────────────────────────────────────────
+
 name: Daily YouTube Short
 
 on:
   schedule:
+    # Runs daily at 10:00 UTC (adjust for your timezone)
     - cron: "0 10 * * *"
-    - cron: "30 23 * * *" 
   workflow_dispatch:
     inputs:
       channel:
-        description: "Channel preset (ghost_stories, facts, school_story, etc.)"
+        description: "Channel preset to run"
         required: true
         default: "ghost_stories"
+        type: choice
+        options:
+          - ghost_stories
+          - facts
+          - hindi_myth
+          - school_story
+          - psych_tradeoff
+          - history_micro
       topic:
-        description: "Optional topic hint"
+        description: "Optional topic hint (leave blank for random)"
         required: false
+        type: string
         default: ""
+      privacy:
+        description: "YouTube privacy setting"
+        required: true
+        default: "public"
+        type: choice
+        options:
+          - private
+          - unlisted
+          - public
 
-env:
-  GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-  DEAPI_TOKEN: ${{ secrets.DEAPI_TOKEN }}
-  YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
-  YT_CLIENT_SECRET_VALUE: ${{ secrets.YT_CLIENT_SECRET_VALUE }}
-  YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-  EDGE_TTS_VOICE: "en-US-ChristopherNeural"
+# ── Concurrency: only one run per channel at a time ────────
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.inputs.channel || 'default' }}
+  cancel-in-progress: false
 
 jobs:
-  generate-and-upload:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+  generate-short:
+    name: "Generate & upload Short (${{ github.event.inputs.channel || 'ghost_stories' }})"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
 
     steps:
-      - name: Checkout
+      # ── 1. Checkout ──────────────────────────────────────────
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      # ── 2. Setup Python ──────────────────────────────────────
+      - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
           cache: "pip"
+          cache-dependency-path: Youtube_bot/requirements.txt
 
-      - name: Install ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      # ── 3. Install system + Python deps ──────────────────────
+      - name: Install FFmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
 
-      - name: Install Python deps
-        run: pip install -r requirements.txt
-
-      # Restore story history from previous runs (prevents repeats)
-      - name: Restore history cache
-        uses: actions/cache/restore@v4
-        with:
-          path: output/history/
-          key: story-history-${{ github.event.inputs.channel || 'ghost_stories' }}-${{ github.run_id }}
-          restore-keys: |
-            story-history-${{ github.event.inputs.channel || 'ghost_stories' }}-
-
-      - name: Generate & upload Short
+      - name: Install Python dependencies
         run: |
-          CHANNEL="${{ github.event.inputs.channel || 'ghost_stories' }}"
-          TOPIC="${{ github.event.inputs.topic || '' }}"
+          cd Youtube_bot
+          pip install -r requirements.txt
 
-          if [ -n "$TOPIC" ]; then
-            python scripts/run_short.py --channel "$CHANNEL" --topic "$TOPIC" --upload --privacy public
-          else
-            python scripts/run_short.py --channel "$CHANNEL" --upload --privacy public
+      # ── 4. Determine channel ─────────────────────────────────
+      - name: Determine channel preset
+        id: channel
+        run: |
+          CHANNEL="${{ github.event.inputs.channel }}"
+          if [ -z "$CHANNEL" ]; then
+            # Daily cron default: alternate between channels
+            DAY_OF_YEAR=$(date +%j)
+            CHANNELS=("ghost_stories" "facts" "hindi_myth" "school_story" "psych_tradeoff" "history_micro")
+            IDX=$(( DAY_OF_YEAR % ${#CHANNELS[@]} ))
+            CHANNEL="${CHANNELS[$IDX]}"
           fi
+          echo "channel=$CHANNEL" >> $GITHUB_OUTPUT
+          echo "Selected channel: $CHANNEL"
 
-      # Save history so next run knows what stories already exist
-      - name: Save history cache
+      # ── 5. Restore story history cache ───────────────────────
+      - name: Restore story history
+        id: cache-history
+        uses: actions/cache@v4
+        with:
+          path: Youtube_bot/output/history
+          key: story-history-${{ steps.channel.outputs.channel }}-${{ github.run_id }}
+          restore-keys: |
+            story-history-${{ steps.channel.outputs.channel }}-
+            story-history-
+
+      # ── 6. Run the pipeline ──────────────────────────────────
+      - name: Generate, render & upload Short
+        env:
+          # Groq
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GROQ_MODEL: "llama-3.3-70b-versatile"
+
+          # DeAPI.ai images
+          DEAPI_TOKEN: ${{ secrets.DEAPI_TOKEN }}
+          DEAPI_MODEL: "Flux_2_Klein_4B_BF16"
+          DEAPI_IMAGE_WIDTH: 768
+          DEAPI_IMAGE_HEIGHT: 768
+          DEAPI_COOLDOWN: 10
+
+          # TTS
+          EDGE_TTS_VOICE: ${{ secrets.EDGE_TTS_VOICE || 'en-US-ChristopherNeural' }}
+
+          # YouTube OAuth (shared client)
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET_VALUE: ${{ secrets.YT_CLIENT_SECRET_VALUE }}
+
+          # YouTube refresh tokens (per-channel)
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          YT_REFRESH_TOKEN_HI: ${{ secrets.YT_REFRESH_TOKEN_HI }}
+          YT_REFRESH_TOKEN_EN: ${{ secrets.YT_REFRESH_TOKEN_EN }}
+          YT_REFRESH_TOKEN_MYTH: ${{ secrets.YT_REFRESH_TOKEN_MYTH }}
+          YT_REFRESH_TOKEN_MYTH_2: ${{ secrets.YT_REFRESH_TOKEN_MYTH_2 }}
+
+          # Optional: override topic (for manual runs)
+          SHORT_TOPIC: ${{ github.event.inputs.topic || '' }}
+        run: |
+          cd Youtube_bot
+          python scripts/run_short.py \
+            --channel "${{ steps.channel.outputs.channel }}" \
+            --upload \
+            --privacy "${{ github.event.inputs.privacy || 'public' }}"
+
+      # ── 7. Save story history for next run ───────────────────
+      - name: Save story history cache
         uses: actions/cache/save@v4
         if: always()
         with:
-          path: output/history/
-          key: story-history-${{ github.event.inputs.channel || 'ghost_stories' }}-${{ github.run_id }}
+          path: Youtube_bot/output/history
+          key: story-history-${{ steps.channel.outputs.channel }}-${{ github.run_id }}
+
+      # ── 8. Upload artifacts (debug / review) ────────────────
+      - name: Upload run artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-output-${{ steps.channel.outputs.channel }}-${{ github.run_id }}
+          path: Youtube_bot/output/runs/
+          retention-days: 3
