@@ -85,10 +85,7 @@ jobs:
         run: |
           CHANNEL="${{ github.event.inputs.channel }}"
           if [ -z "$CHANNEL" ]; then
-            DAY_OF_YEAR=$(date +%j)
-            CHANNELS=("ghost_stories" "facts" "hindi_myth" "school_story" "psych_tradeoff" "history_micro")
-            IDX=$(( DAY_OF_YEAR % ${#CHANNELS[@]} ))
-            CHANNEL="${CHANNELS[$IDX]}"
+            CHANNEL="ghost_stories"
           fi
           echo "channel=$CHANNEL" >> $GITHUB_OUTPUT
           echo "Selected channel: $CHANNEL"
