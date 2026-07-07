@@ -308,8 +308,14 @@ PRESETS: dict[str, ChannelPreset] = {
             "CRITICAL LENGTH RULE: The TOTAL word count across ALL 6 segments MUST be 120-140 words. "
             "Each segment narration = 2-3 sentences, about 20-25 words per segment. "
             "This produces 35-45 seconds of audio when read aloud. "
+            "RETENTION RULE: The FIRST sentence must stop scrolling immediately: ask a creepy question, "
+            "make a disturbing claim, or open with an impossible detail. No slow setup. "
+            "Use curiosity gaps: hint that something is wrong, delay the explanation, then reveal the worst detail late. "
+            "Every 2-3 sentences should add a new escalation: a sound, a message, a shadow, a rule being broken, "
+            "or a detail that changes what the viewer thought was happening. "
             "Tone: eerie, suspenseful, creepy but NOT gory or violent. "
-            "Segment 1: hook that stops scrolling. Last segment: chilling twist or unanswered question. "
+            "Segment 1: hook that stops scrolling. Last segment: chilling twist or unanswered question, "
+            "then a natural comment/follow prompt such as 'Would you have opened it?' or 'Follow for the next story.' "
             "All stories fictional. Original characters. PG-13. No hashtags in narration."
         ),
         "segment_count": 6,
@@ -325,31 +331,31 @@ PRESETS: dict[str, ChannelPreset] = {
             "gore, blood, nudity, child-unsafe"
         ),
         "topic_pool": [
-            "a ghost haunting an empty school at night",
-            "a strange presence in a family home",
-            "something unexplained during a picnic in the woods",
-            "a ghost encounter at a friend's sleepover",
-            "a haunted old cabin during a camping trip",
-            "a ghost on a late-night train",
-            "something wrong with the new neighbor's house",
-            "a spirit in grandparents' attic",
-            "an abandoned playground after dark",
-            "a ghost at a roadside motel",
-            "strange events at a wedding venue",
-            "a haunted library after closing",
-            "something watching from the forest edge",
-            "a ghost during a blackout storm",
-            "an eerie presence at a local hospital",
-            "something in the basement nobody talks about",
-            "a ghost on a deserted beach at night",
-            "a haunted elevator in an old building",
-            "a strange figure at a bus stop at 3 AM",
-            "something whispering from an old well",
-            "a ghost in a classroom after everyone left",
-            "a haunted antique bought from a flea market",
-            "a spirit tied to an old family photograph",
-            "something in the fog on a mountain road",
-            "a ghost at a summer camp",
+            "an empty school where one classroom still takes attendance at 3 AM",
+            "a family home where the hallway light blinks once for yes and twice for no",
+            "a picnic photo where someone appears closer every time it is opened",
+            "a sleepover where the kid under the blanket is not one of the guests",
+            "an old cabin with a guestbook signed by people who never left",
+            "a late-night train where the conductor asks for tickets from the dead",
+            "a new neighbor whose house has windows facing rooms that do not exist",
+            "grandparents' attic where a music box plays only when someone lies",
+            "an abandoned playground swing that moves only when a child says your name",
+            "a roadside motel room where the mirror shows yesterday's guest",
+            "a wedding venue where the bride in every old photo has the same face",
+            "a haunted library book that writes the reader's final sentence",
+            "something at the forest edge copying a missing friend's voice",
+            "a blackout storm where every phone receives the same impossible voicemail",
+            "a hospital room where the call button rings from an empty bed",
+            "a basement door with scratch marks on the inside and fresh paint outside",
+            "a deserted beach where wet footprints walk out of the ocean and stop at your towel",
+            "an elevator that skips floor seven until someone whispers your full name",
+            "a bus stop at 3 AM where the posted route lists tomorrow's disappearances",
+            "an old well that repeats secrets no one has said aloud yet",
+            "a classroom after hours where the chalk writes names before they arrive",
+            "an antique doll from a flea market that learns the family's routines",
+            "an old family photograph where one dead relative keeps turning around",
+            "a foggy mountain road where the same hitchhiker appears after every turn",
+            "a summer camp rulebook with one rule written in fresh handwriting",
         ],
     },
 }

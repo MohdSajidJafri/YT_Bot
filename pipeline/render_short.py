@@ -19,6 +19,28 @@ DEFAULT_FONT_NAME = "Creepster"
 FPS = 30
 FADE_DUR = 0.5
 ZOOM_AMOUNT = 0.08
+TITLE_OVERLAY_SECONDS = 2.5
+HOOK_OVERLAY_SECONDS = 4.0
+CTA_OVERLAY_SECONDS = 2.2
+
+
+def _escape_drawtext_text(text: str) -> str:
+    """Escape user/model text for FFmpeg drawtext filter values."""
+    return (
+        text.replace("\\", "\\\\")
+        .replace(":", "\\:")
+        .replace("'", "\\'")
+        .replace("%", "\\%")
+        .replace("\n", " ")
+        .strip()
+    )
+
+
+def _compact_overlay_text(text: str, max_chars: int) -> str:
+    text = " ".join(text.split())
+    if len(text) <= max_chars:
+        return text
+    return text[: max_chars - 1].rstrip() + "..."
 
 
 def render_vertical_short(
@@ -32,6 +54,9 @@ def render_vertical_short(
     height: int = 1920,
     font_file: str = DEFAULT_FONT_FILE,
     font_name: str = DEFAULT_FONT_NAME,
+    title_text: str | None = None,
+    hook_text: str | None = None,
+    cta_text: str | None = "SUBSCRIBE FOR MORE",
 ) -> None:
     if not image_paths:
         raise ValueError("No images")
@@ -105,16 +130,19 @@ def render_vertical_short(
         fontsdir_arg = ":fontsdir='_fonts'"
     else:
         print(f"   ⚠ Font {font_path} not found — using {rendered_font_name}")
+    overlay_font_arg = ""
+    if font_path.is_file():
+        overlay_font_arg = f"fontfile='{(Path('_fonts') / font_path.name).as_posix()}':"
 
     force_style = (
         f"FontName={rendered_font_name},"
-        f"FontSize=18,"
+        f"FontSize=32,"
         f"PrimaryColour=&H00FFFFFF,"
         f"OutlineColour=&H00000000,"
-        f"BackColour=&H96000000,"
-        f"BorderStyle=4,Outline=1,Bold=1,"
+        f"BackColour=&H9A000000,"
+        f"BorderStyle=4,Outline=2,Bold=1,"
         f"Shadow=0,Alignment=2,"
-        f"MarginV=15,MarginL=20,MarginR=20"
+        f"MarginV=42,MarginL=28,MarginR=28"
     )
 
     # ── 4. Build xfade chain + subtitles ─────────────────────────────
@@ -125,10 +153,11 @@ def render_vertical_short(
 
     filter_parts: list[str] = []
 
+    sub_label = "subs"
     if n == 1:
         filter_parts.append(
             f"[0:v]subtitles=captions.srt{fontsdir_arg}:"
-            f"force_style='{force_style}'[final]"
+            f"force_style='{force_style}'[{sub_label}]"
         )
     else:
         prev = "[0:v]"
@@ -143,8 +172,57 @@ def render_vertical_short(
             prev = out
         filter_parts.append(
             f"{prev}subtitles=captions.srt{fontsdir_arg}:"
-            f"force_style='{force_style}'[final]"
+            f"force_style='{force_style}'[{sub_label}]"
         )
+
+    # Retention overlays: fast title/hook at open, CTA at close. Optional args keep
+    # the renderer backward-compatible for older callers and tests.
+    overlay_input = sub_label
+    overlay_idx = 0
+    if title_text:
+        text = _escape_drawtext_text(_compact_overlay_text(title_text.upper(), 44))
+        out = f"ov{overlay_idx}"
+        filter_parts.append(
+            f"[{overlay_input}]drawtext=text='{text}':"
+            f"{overlay_font_arg}"
+            f"x=(w-text_w)/2:y=h*0.09:fontsize=72:"
+            f"fontcolor=white:borderw=5:bordercolor=black:"
+            f"box=1:boxcolor=black@0.55:boxborderw=24:"
+            f"enable='between(t,0,{TITLE_OVERLAY_SECONDS:.2f})'[{out}]"
+        )
+        overlay_input = out
+        overlay_idx += 1
+
+    if hook_text:
+        text = _escape_drawtext_text(_compact_overlay_text(hook_text.upper(), 62))
+        out = f"ov{overlay_idx}"
+        filter_parts.append(
+            f"[{overlay_input}]drawtext=text='{text}':"
+            f"{overlay_font_arg}"
+            f"x=(w-text_w)/2:y=h*0.31:fontsize=54:"
+            f"fontcolor=white:borderw=4:bordercolor=black:"
+            f"box=1:boxcolor=black@0.48:boxborderw=20:"
+            f"enable='between(t,0.15,{HOOK_OVERLAY_SECONDS:.2f})'[{out}]"
+        )
+        overlay_input = out
+        overlay_idx += 1
+
+    if cta_text:
+        text = _escape_drawtext_text(_compact_overlay_text(cta_text.upper(), 34))
+        out = f"ov{overlay_idx}"
+        start_time = max(total_duration - CTA_OVERLAY_SECONDS, 0)
+        filter_parts.append(
+            f"[{overlay_input}]drawtext=text='{text}':"
+            f"{overlay_font_arg}"
+            f"x=(w-text_w)/2:y=h*0.12:fontsize=58:"
+            f"fontcolor=white:borderw=4:bordercolor=black:"
+            f"box=1:boxcolor=black@0.50:boxborderw=22:"
+            f"enable='gte(t,{start_time:.2f})'[{out}]"
+        )
+        overlay_input = out
+        overlay_idx += 1
+
+    filter_parts.append(f"[{overlay_input}]format=yuv420p[final]")
 
     fc = ";\n".join(filter_parts)
 

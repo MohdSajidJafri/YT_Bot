@@ -112,6 +112,9 @@ STRICT RULES:
 - Each image_prompt matches a different moment/beat in order.
 - Image prompts are just visuals — no narration text, no style words, no quotes.
 - The narration must flow naturally as one spoken piece (no "segment 1", "segment 2" etc).
+- The FIRST sentence must be a hard hook: a direct question, a disturbing claim, or a curiosity gap.
+- Reveal the creepiest detail only near the final third; do not explain the mystery too early.
+- The LAST sentence should invite comments or follows in a natural horror-channel voice, without hashtags.
 """
 
     max_attempts = 3

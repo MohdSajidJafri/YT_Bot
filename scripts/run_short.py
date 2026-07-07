@@ -31,6 +31,7 @@ import argparse
 import json
 import os
 import random
+import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -51,6 +52,17 @@ from pipeline.hashtags import append_hashtags
 from pipeline.images import DEFAULT_NEGATIVE, full_visual_prompt, save_scene_image
 from pipeline.render_short import render_vertical_short
 from pipeline.story_history import save_title
+
+
+def _first_sentence(text: str) -> str:
+    """Best-effort first sentence for the visual hook overlay."""
+    clean = " ".join(text.split())
+    if not clean:
+        return ""
+    match = re.search(r"(.+?[.!?])(?:\s|$)", clean)
+    if match:
+        return match.group(1).strip()
+    return clean[:120].strip()
 
 
 def _render_and_upload(
@@ -91,6 +103,8 @@ def _render_and_upload(
     render_vertical_short(
         image_paths, total_dur, audio_path, srt_path, video_path,
         font_file=font_file, font_name=font_name,
+        title_text=title,
+        hook_text=_first_sentence(narration),
     )
     print(f"   → {video_path}")
 
