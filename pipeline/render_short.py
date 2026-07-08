@@ -188,7 +188,7 @@ def render_vertical_short(
             f"x=(w-text_w)/2:y=h*0.09:fontsize=72:"
             f"fontcolor=white:borderw=5:bordercolor=black:"
             f"box=1:boxcolor=black@0.55:boxborderw=24:"
-            f"enable='between(t,0,{TITLE_OVERLAY_SECONDS:.2f})'[{out}]"
+            f"enable='between(t\\,0\\,{TITLE_OVERLAY_SECONDS:.2f})'[{out}]"
         )
         overlay_input = out
         overlay_idx += 1
@@ -202,7 +202,7 @@ def render_vertical_short(
             f"x=(w-text_w)/2:y=h*0.31:fontsize=54:"
             f"fontcolor=white:borderw=4:bordercolor=black:"
             f"box=1:boxcolor=black@0.48:boxborderw=20:"
-            f"enable='between(t,0.15,{HOOK_OVERLAY_SECONDS:.2f})'[{out}]"
+            f"enable='between(t\\,0.15\\,{HOOK_OVERLAY_SECONDS:.2f})'[{out}]"
         )
         overlay_input = out
         overlay_idx += 1
@@ -217,7 +217,7 @@ def render_vertical_short(
             f"x=(w-text_w)/2:y=h*0.12:fontsize=58:"
             f"fontcolor=white:borderw=4:bordercolor=black:"
             f"box=1:boxcolor=black@0.50:boxborderw=22:"
-            f"enable='gte(t,{start_time:.2f})'[{out}]"
+            f"enable='gte(t\\,{start_time:.2f})'[{out}]"
         )
         overlay_input = out
         overlay_idx += 1
