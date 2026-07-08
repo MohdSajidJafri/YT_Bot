@@ -37,13 +37,14 @@ def main() -> None:
                 audio_path=audio_path,
                 srt_path=srt_path,
                 out_video=out_video,
-                title_text="The lonely swing",
+                title_text="The hitchhiker's dilemma",
                 hook_text="I've always been drawn here",
                 cta_text="Subscribe for more",
             )
 
     cmd = calls[-1][0]
     fc = cmd[cmd.index("-filter_complex") + 1]
+    assert "HITCHHIKER\\\\'S" in fc
     assert f"between(t\\,0\\,{TITLE_OVERLAY_SECONDS:.2f})" in fc
     assert f"between(t\\,0.15\\,{HOOK_OVERLAY_SECONDS:.2f})" in fc
     assert "gte(t\\," in fc
