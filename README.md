@@ -8,7 +8,7 @@ Fully automated: **Groq script → Edge TTS voice → AI images → captions →
 scripts/run_short.py          ← orchestrator
   pipeline/groq_script.py     ← Groq LLM writes the Short script (JSON)
   pipeline/edge_tts_synth.py  ← Edge TTS: free voice, per-segment MP3
-  pipeline/images.py          ← HuggingFace image gen (Pollinations fallback)
+  pipeline/images.py          ← DeAPI.ai image gen (Pollinations fallback)
   pipeline/captions.py        ← SRT from segment timings
   pipeline/render_short.py    ← FFmpeg: slideshow + audio + burned captions
   pipeline/youtube_upload.py  ← YouTube Data API v3 upload
@@ -25,7 +25,7 @@ python3 -m venv .venv
 
 # Copy and fill in your keys:
 cp .env.example .env
-# edit .env → add GROQ_API_KEY, HF_TOKEN
+# edit .env → add GROQ_API_KEY, DEAPI_TOKEN
 
 # Install ffmpeg if needed:
 brew install ffmpeg         # macOS
@@ -42,7 +42,8 @@ brew install ffmpeg         # macOS
 | Service | Free? | What for | Get it here |
 |---------|-------|----------|-------------|
 | **Groq** | ✅ free tier | Script generation (LLM) | https://console.groq.com/keys |
-| **HuggingFace** | ✅ free tier | Image generation | https://huggingface.co/settings/tokens (select "Inference Providers" permission) |
+| **DeAPI.ai** | ⚠️ Paid key (Flux) | Image generation | https://deapi.ai (falls back to Pollinations if unset) |
+| **Pollinations** | ✅ 100% free | Image fallback | No key needed |
 | **Edge TTS** | ✅ 100% free | Voice / audio | No key needed — uses Microsoft Edge voices |
 | **FFmpeg** | ✅ open source | Video render | `brew install ffmpeg` or `apt install ffmpeg` |
 | **YouTube API** | ✅ free | Upload | Google Cloud Console (see below) |
@@ -76,7 +77,7 @@ Go to **repo → Settings → Secrets and variables → Actions → New reposito
 | Secret name | Value |
 |-------------|-------|
 | `GROQ_API_KEY` | Your Groq key |
-| `HF_TOKEN` | Your HuggingFace token |
+| `DEAPI_TOKEN` | Your DeAPI token (optional fallback to Pollinations) |
 | `YT_CLIENT_ID` | Printed by `youtube_auth.py` |
 | `YT_CLIENT_SECRET_VALUE` | Printed by `youtube_auth.py` |
 | `YT_REFRESH_TOKEN` | Printed by `youtube_auth.py` |
@@ -128,7 +129,7 @@ For multiple channels: duplicate the workflow YAML, use different `CHANNEL=` def
 | Component | Cost |
 |-----------|------|
 | Groq | Free tier (~$0) |
-| HuggingFace images | Free tier (~$0) |
+| DeAPI / Pollinations | Paid / Free fallback (~$0) |
 | Edge TTS | $0 |
 | FFmpeg | $0 |
 | GitHub Actions | 2000 min/month free |
