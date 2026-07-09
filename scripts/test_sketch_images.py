@@ -20,7 +20,6 @@ load_dotenv(REPO_ROOT / "scripts" / ".env")
 from pipeline.images import (
     DEFAULT_NEGATIVE,
     full_visual_prompt,
-    model_candidates,
     save_scene_image,
 )
 
@@ -64,43 +63,24 @@ def work_scene(
     idx: int,
     scene: str,
     out_path: Path,
-    token: str | None,
     width: int,
     height: int,
     negative: str,
-    models: list[str],
-    allow_pollinations: bool,
 ) -> tuple[int, str, str]:
     p = full_visual_prompt(scene)
     st, det = save_scene_image(
         idx,
         p,
         out_path,
-        token=token,
         width=width,
         height=height,
         negative=negative,
-        models=models,
-        allow_pollinations=allow_pollinations,
     )
     return idx, st, det
 
 
 def main() -> None:
-    token = os.environ.get("HF_TOKEN", "").strip() or None
-    allow_pollinations = os.environ.get("HF_NO_POLLINATIONS", "").lower() not in (
-        "1",
-        "true",
-        "yes",
-    )
-
-    if not token and not allow_pollinations:
-        print(
-            "Set HF_TOKEN or enable Pollinations fallback (default on).\n"
-            "To require HF only: set HF_TOKEN; to block fallback: HF_NO_POLLINATIONS=1",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    deapi_token = os.environ.get("DEAPI_TOKEN", "").strip() or None
 
     topic_key = (sys.argv[1] if len(sys.argv) > 1 else "schoolstory").lower()
     topic = TOPICS.get(topic_key)
@@ -111,17 +91,15 @@ def main() -> None:
         )
         sys.exit(1)
 
-    width = int(os.environ.get("HF_IMAGE_WIDTH", "512"))
-    height = int(os.environ.get("HF_IMAGE_HEIGHT", "512"))
-    negative = os.environ.get("HF_NEGATIVE_PROMPT", DEFAULT_NEGATIVE)
-    models = model_candidates()
-    workers = max(1, min(8, int(os.environ.get("HF_CONCURRENCY", "2"))))
+    width = int(os.environ.get("DEAPI_IMAGE_WIDTH", "768"))
+    height = int(os.environ.get("DEAPI_IMAGE_HEIGHT", "768"))
+    negative = os.environ.get("IMAGE_NEGATIVE_PROMPT") or DEFAULT_NEGATIVE
+    workers = max(1, min(8, int(os.environ.get("DEAPI_CONCURRENCY", "2"))))
 
     print(f"Topic: {topic['title']}")
-    print(f"HF models (order): {', '.join(models)}")
     print(f"Output: {OUT_DIR}")
     print(f"Workers: {workers}")
-    print(f"HF token: {'yes' if token else 'no (Pollinations only)'}")
+    print(f"DeAPI token configured: {'yes' if deapi_token else 'no (will use Pollinations fallback)'}")
     print()
 
     scenes = topic["scenes"]
@@ -139,12 +117,9 @@ def main() -> None:
                 idx,
                 scene,
                 path,
-                token,
                 width,
                 height,
                 negative,
-                models,
-                allow_pollinations,
             ): idx
             for idx, scene, path in tasks
         }

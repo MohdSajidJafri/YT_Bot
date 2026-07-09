@@ -72,8 +72,9 @@ def render_vertical_short(
     clip_dur = (total_duration + (n - 1) * FADE_DUR) / n if n > 1 else total_duration
     frames_per_clip = max(int(clip_dur * FPS), 2)
 
-    # ── 1. Pre-scale images ──────────────────────────────────────────
-    for i, src in enumerate(image_paths):
+    from concurrent.futures import ThreadPoolExecutor
+
+    def scale_image(i: int, src: Path) -> None:
         dst = tmp / f"img_{i + 1:02d}.png"
         subprocess.run(
             [
@@ -87,8 +88,12 @@ def render_vertical_short(
             check=True,
         )
 
-    # ── 2. Generate zoompan clips ────────────────────────────────────
-    for i in range(n):
+    # ── 1. Pre-scale images in parallel ──────────────────────────────
+    print(f"   Pre-scaling {n} images in parallel…")
+    with ThreadPoolExecutor() as executor:
+        list(executor.map(lambda item: scale_image(*item), enumerate(image_paths)))
+
+    def generate_clip(i: int) -> None:
         src_img = tmp / f"img_{i + 1:02d}.png"
         clip = tmp / f"clip_{i + 1:02d}.mp4"
         zoom_rate = ZOOM_AMOUNT / frames_per_clip
@@ -115,6 +120,11 @@ def render_vertical_short(
             ],
             check=True,
         )
+
+    # ── 2. Generate zoompan clips in parallel ────────────────────────
+    print(f"   Generating {n} zoompan clips in parallel…")
+    with ThreadPoolExecutor() as executor:
+        list(executor.map(generate_clip, range(n)))
 
     # ── 3. Prepare subtitles + font ──────────────────────────────────
     shutil.copyfile(srt_path, tmp / "captions.srt")

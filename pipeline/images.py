@@ -123,22 +123,49 @@ def save_scene_image(
 ) -> tuple[str, str]:
     """Generate and save one image. Returns (status, detail)."""
     api_key = os.environ.get("DEAPI_TOKEN", "").strip()
-    if not api_key:
-        return "fail", "DEAPI_TOKEN not set"
-
-    model = os.environ.get("DEAPI_MODEL", "Flux_2_Klein_4B_BF16")
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    try:
-        img_bytes = _deapi_generate(
-            prompt,
-            api_key=api_key,
-            width=width,
-            height=height,
-            model=model,
-        )
-        out_path.write_bytes(img_bytes)
-        return "ok", "deapi"
-    except Exception as e:
-        return "fail", str(e)
+    if api_key:
+        model = os.environ.get("DEAPI_MODEL", "Flux_2_Klein_4B_BF16")
+        try:
+            img_bytes = _deapi_generate(
+                prompt,
+                api_key=api_key,
+                width=width,
+                height=height,
+                model=model,
+            )
+            out_path.write_bytes(img_bytes)
+            return "ok", "deapi"
+        except Exception as e:
+            print(f"      DeAPI failed: {e} — falling back to Pollinations.ai…")
+    else:
+        print("      DEAPI_TOKEN not set — using Pollinations.ai…")
+
+    # Pollinations.ai Fallback
+    import urllib.parse
+    import random
+    encoded_prompt = urllib.parse.quote(prompt)
+    url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={width}&height={height}&nologo=true&private=true"
+
+    last_poll_err = None
+    for attempt in range(5):
+        try:
+            with httpx.Client(timeout=60.0) as client:
+                resp = client.get(url)
+                if resp.status_code == 429:
+                    wait_time = 10 * (attempt + 1) + random.uniform(1, 5)
+                    print(f"      Pollinations 429 (try {attempt + 1}/5) — waiting {wait_time:.1f}s…")
+                    time.sleep(wait_time)
+                    continue
+                resp.raise_for_status()
+                out_path.write_bytes(resp.content)
+                return "ok", "pollinations"
+        except Exception as e:
+            last_poll_err = e
+            wait_time = 5 * (attempt + 1)
+            print(f"      Pollinations error: {e} (try {attempt + 1}/5) — waiting {wait_time}s…")
+            time.sleep(wait_time)
+
+    return "fail", f"Both DeAPI and Pollinations failed. Pollinations error: {last_poll_err}"
