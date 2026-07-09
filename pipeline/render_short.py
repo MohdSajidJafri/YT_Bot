@@ -29,7 +29,7 @@ def _escape_drawtext_text(text: str) -> str:
     return (
         text.replace("\\", "\\\\")
         .replace(":", "\\:")
-        .replace("'", "\\\\'")
+        .replace("'", "\\'")
         .replace("%", "\\%")
         .replace("\n", " ")
         .strip()

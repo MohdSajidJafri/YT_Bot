@@ -44,7 +44,8 @@ def main() -> None:
 
     cmd = calls[-1][0]
     fc = cmd[cmd.index("-filter_complex") + 1]
-    assert "HITCHHIKER\\\\'S" in fc
+    assert "HITCHHIKER\\'S" in fc
+    assert "HITCHHIKER\\\\'S" not in fc
     assert f"between(t\\,0\\,{TITLE_OVERLAY_SECONDS:.2f})" in fc
     assert f"between(t\\,0.15\\,{HOOK_OVERLAY_SECONDS:.2f})" in fc
     assert "gte(t\\," in fc
