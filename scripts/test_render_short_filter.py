@@ -27,9 +27,26 @@ def main() -> None:
             calls.append((cmd, cwd))
             return None
 
+        class MockResponse:
+            status_code = 200
+            content = b""
+            def raise_for_status(self):
+                pass
+
+        class MockClient:
+            def __init__(self, *args, **kwargs):
+                pass
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                pass
+            def get(self, url, *args, **kwargs):
+                return MockResponse()
+
         with (
             patch("pipeline.render_short.shutil.which", return_value="/usr/bin/ffmpeg"),
             patch("pipeline.render_short.subprocess.run", side_effect=_fake_run),
+            patch("httpx.Client", MockClient),
         ):
             render_vertical_short(
                 image_paths=[tmp / "img1.png", tmp / "img2.png"],
@@ -49,7 +66,17 @@ def main() -> None:
     assert f"between(t,0,{TITLE_OVERLAY_SECONDS:.2f})" in fc
     assert f"between(t,0.15,{HOOK_OVERLAY_SECONDS:.2f})" in fc
     assert "gte(t," in fc
+    assert "amix=inputs=2:duration=first" in fc
+    assert "volume=0.08" in fc
     print("render_short filter expression escaping test passed")
+
+    # Clean up dummy downloaded bg music in test if it was created
+    dummy_bg = REPO_ROOT / "assets" / "audio" / "spooky_bg.mp3"
+    if dummy_bg.is_file() and dummy_bg.stat().st_size == 0:
+        try:
+            dummy_bg.unlink()
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":

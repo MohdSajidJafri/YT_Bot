@@ -279,6 +279,18 @@ def main() -> None:
             )
             print(f"   Extra channel video: https://www.youtube.com/shorts/{vid_extra}")
 
+    print("\n💡 Suggested Engagement Pinned Comments:")
+    if variants:
+        for v in variants:
+            node = pack["variants"][v["lang"]]
+            comment = node.get("pinned_comment", "").strip()
+            if comment:
+                print(f"   [{v['label']}]: {comment}")
+    else:
+        comment = pack.get("pinned_comment", "").strip()
+        if comment:
+            print(f"   {comment}")
+
     print("\n✓ Done.")
 
 

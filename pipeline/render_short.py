@@ -146,20 +146,39 @@ def render_vertical_short(
 
     force_style = (
         f"FontName={rendered_font_name},"
-        f"FontSize=32,"
+        f"FontSize=68,"
         f"PrimaryColour=&H00FFFFFF,"
         f"OutlineColour=&H00000000,"
         f"BackColour=&H9A000000,"
         f"BorderStyle=4,Outline=2,Bold=1,"
         f"Shadow=0,Alignment=2,"
-        f"MarginV=42,MarginL=28,MarginR=28"
+        f"MarginV=550,MarginL=28,MarginR=28"
     )
 
-    # ── 4. Build xfade chain + subtitles ─────────────────────────────
+    bg_music_path = REPO_ROOT / "assets" / "audio" / "spooky_bg.mp3"
+    if not bg_music_path.is_file():
+        print("   Background music not found. Downloading default spooky ambiance track…")
+        try:
+            import httpx
+            bg_music_path.parent.mkdir(parents=True, exist_ok=True)
+            url = "https://archive.org/download/waving-ant-analog-horror/10%20-%20Dread%20Ambience%20%28Found%20Archive%29.mp3"
+            with httpx.Client(follow_redirects=True, timeout=60.0) as client:
+                resp = client.get(url)
+                resp.raise_for_status()
+                bg_music_path.write_bytes(resp.content)
+            print("   Downloaded background music successfully.")
+        except Exception as e:
+            print(f"   ⚠ Failed to download background music: {e} — continuing without background music.")
+
     inputs: list[str] = []
     for i in range(n):
         inputs += ["-i", f"clip_{i + 1:02d}.mp4"]
     inputs += ["-i", str(audio_path.resolve())]
+
+    bg_music_idx = None
+    if bg_music_path.is_file():
+        inputs += ["-stream_loop", "-1", "-i", str(bg_music_path.resolve())]
+        bg_music_idx = n + 1
 
     filter_parts: list[str] = []
 
@@ -234,13 +253,19 @@ def render_vertical_short(
 
     filter_parts.append(f"[{overlay_input}]format=yuv420p[final]")
 
+    audio_map = f"{n}:a"
+    if bg_music_idx is not None:
+        filter_parts.append(f"[{bg_music_idx}:a]volume=0.08[bg]")
+        filter_parts.append(f"[{n}:a][bg]amix=inputs=2:duration=first:dropout_transition=2[mixed_audio]")
+        audio_map = "[mixed_audio]"
+
     fc = ";\n".join(filter_parts)
 
     cmd = [
         "ffmpeg", "-y", "-hide_banner", "-loglevel", "warning",
         *inputs,
         "-filter_complex", fc,
-        "-map", "[final]", "-map", f"{n}:a",
+        "-map", "[final]", "-map", audio_map,
         "-c:v", "libx264", "-preset", "fast", "-crf", "23",
         "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "192k",
