@@ -29,7 +29,7 @@ def _escape_drawtext_text(text: str) -> str:
     return (
         text.replace("\\", "\\\\")
         .replace(":", "\\:")
-        .replace("'", "\\'")
+        .replace("'", "'\\''")
         .replace("%", "\\%")
         .replace("\n", " ")
         .strip()
@@ -155,7 +155,10 @@ def render_vertical_short(
         f"MarginV=550,MarginL=28,MarginR=28"
     )
 
-    bg_music_path = REPO_ROOT / "assets" / "audio" / "spooky_bg.mp3"
+    bg_music_path = REPO_ROOT / "assets" / "audio" / "leberch-psychological-horror-520373.mp3"
+    if not bg_music_path.is_file():
+        bg_music_path = REPO_ROOT / "assets" / "audio" / "spooky_bg.mp3"
+
     if not bg_music_path.is_file():
         print("   Background music not found. Downloading default spooky ambiance track…")
         try:
