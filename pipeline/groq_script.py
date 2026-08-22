@@ -10,7 +10,7 @@ import json
 import os
 from typing import Any
 
-from groq import Groq
+from groq import BadRequestError, Groq
 
 from pipeline.channel_presets import ChannelPreset
 from pipeline.story_history import history_prompt_block
@@ -279,17 +279,44 @@ def _call_groq(
     temperature: float = 0.85,
 ) -> dict[str, Any]:
     client = Groq(api_key=os.environ["GROQ_API_KEY"])
-    resp = client.chat.completions.create(
-        model=GROQ_MODEL,
-        messages=[
-            {"role": "system", "content": preset["groq_system_hint"]},
-            {"role": "user", "content": user},
-        ],
-        temperature=temperature,
-        max_tokens=3072,
-        response_format={"type": "json_object"},
+    json_repair_instruction = (
+        "\n\nIMPORTANT: Output must be STRICT valid JSON only. "
+        "Do not include markdown fences, extra prose, or trailing commas."
     )
-    raw = resp.choices[0].message.content
-    if not raw:
-        raise RuntimeError("Empty Groq response")
-    return json.loads(raw)
+
+    for attempt in range(3):
+        retry_user = user if attempt == 0 else user + json_repair_instruction
+        try:
+            resp = client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": preset["groq_system_hint"]},
+                    {"role": "user", "content": retry_user},
+                ],
+                temperature=temperature,
+                max_tokens=3072,
+                response_format={"type": "json_object"},
+            )
+        except BadRequestError as e:
+            msg = str(e)
+            if (
+                "json_validate_failed" in msg
+                or "Failed to validate JSON" in msg
+            ) and attempt < 2:
+                continue
+            raise
+
+        raw = resp.choices[0].message.content
+        if not raw:
+            if attempt < 2:
+                continue
+            raise RuntimeError("Empty Groq response")
+
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            if attempt < 2:
+                continue
+            raise
+
+    raise RuntimeError("Groq JSON generation failed after retries")
