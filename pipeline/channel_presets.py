@@ -69,6 +69,7 @@ PRESETS: dict[str, ChannelPreset] = {
             },
         ],
         "groq_system_hint": (
+            "You are a professional YouTube Shorts scriptwriter. Respond in valid JSON format only. "
             "You write punchy YouTube Shorts about surprising, verified facts — in MULTIPLE languages. "
             "The same fact will be published as separate videos on different language channels. "
             "STRUCTURE: hook fact in opening, supporting facts in the middle, punchline + takeaway at end. "
@@ -213,6 +214,7 @@ PRESETS: dict[str, ChannelPreset] = {
         "yt_token_env": "YT_REFRESH_TOKEN_MYTH",
         "extra_yt_token_envs": ["YT_REFRESH_TOKEN_MYTH_2"],
         "groq_system_hint": (
+            "You are a professional YouTube Shorts scriptwriter. Respond in valid JSON format only. "
             "You write respectful Hindi Shorts about Indian mythology, epics, and devotion — for a general audience. "
             "LANGUAGE: full_narration, youtube_title, youtube_description entirely in Devanagari Hindi. "
             "IMAGE PROMPTS: English only — cinematic scene descriptions (no text in image). "
@@ -238,6 +240,7 @@ PRESETS: dict[str, ChannelPreset] = {
         "id": "school_story",
         "label": "School drama / storytime Short",
         "groq_system_hint": (
+            "You are a professional YouTube Shorts scriptwriter. Respond in valid JSON format only. "
             "You write fictional school storytime Shorts. Tone: suspense + heart. "
             "Characters are original (no copyrighted names). Hook in line 1. "
             "Build to one memorable twist. Keep each kid-safe."
@@ -260,6 +263,7 @@ PRESETS: dict[str, ChannelPreset] = {
         "id": "psych_tradeoff",
         "label": "Psychology / habits (non-clinical)",
         "groq_system_hint": (
+            "You are a professional YouTube Shorts scriptwriter. Respond in valid JSON format only. "
             "You write Shorts about habits, motivation, and everyday psychology. "
             "Never diagnose or claim medical facts. Use 'some people' / 'research suggests' carefully. "
             "Practical tips only."
@@ -282,6 +286,7 @@ PRESETS: dict[str, ChannelPreset] = {
         "id": "history_micro",
         "label": "One moment in history",
         "groq_system_hint": (
+            "You are a professional YouTube Shorts scriptwriter. Respond in valid JSON format only. "
             "You write one tight historical anecdote per Short. Pick public-domain or widely taught events. "
             "No graphic violence. End with why it matters in one line."
         ),
@@ -304,21 +309,18 @@ PRESETS: dict[str, ChannelPreset] = {
         "label": "Ghost / horror storytime Short",
         "min_words": 100,
         "groq_system_hint": (
+            "You are a professional YouTube Shorts scriptwriter. Respond in valid JSON format only. "
             "You write spooky ghost story Shorts for YouTube. "
-            "CRITICAL LENGTH RULE: The TOTAL word count across ALL 6 segments MUST be 120-140 words. "
-            "Each segment narration = 2-3 sentences, about 20-25 words per segment. "
-            "This produces 35-45 seconds of audio when read aloud. "
+            "CRITICAL LENGTH RULE: The full_narration must be ONE continuous paragraph containing 120-140 words. "
+            "This produces 35-45 seconds of spoken audio. "
             "RETENTION RULE: The FIRST sentence must stop scrolling immediately: ask a creepy question, "
             "make a disturbing claim, or open with an impossible detail. No slow setup. "
             "LOOPING RULE: Write the script as a seamless loop. The final sentence must flow directly, logically, "
-            "and grammatically into the first hook sentence, so the loop is invisible and jarringly continuous. "
+            "and grammatically into the first hook sentence, so the loop is invisible and continuous. "
             "Avoid ending with 'Follow for more' if it disrupts the seamless loop. "
             "Use curiosity gaps: hint that something is wrong, delay the explanation, then reveal the worst detail late. "
-            "Every 2-3 sentences should add a new escalation: a sound, a message, a shadow, a rule being broken, "
-            "or a detail that changes what the viewer thought was happening. "
             "Tone: eerie, suspenseful, creepy but NOT gory or violent. "
-            "Segment 1: hook that stops scrolling. Last segment: chilling twist or unanswered question, "
-            "then a natural comment/follow prompt such as 'Would you have opened it?' or 'Follow for the next story.' "
+            "Include exactly 6 image prompts corresponding to the visual story beats. "
             "All stories fictional. Original characters. PG-13. No hashtags in narration."
         ),
         "segment_count": 6,

@@ -103,7 +103,7 @@ jobs:
       - name: Generate, render & upload Short
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          GROQ_MODEL: "qwen/qwen3.6-27b"
+          GROQ_MODEL: "openai/gpt-oss-20b"
           DEAPI_TOKEN: ${{ secrets.DEAPI_TOKEN }}
           DEAPI_MODEL: "Flux_2_Klein_4B_BF16"
           DEAPI_IMAGE_WIDTH: 768

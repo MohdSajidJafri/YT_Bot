@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from typing import Any
 
 from groq import BadRequestError, Groq
@@ -15,7 +16,7 @@ from groq import BadRequestError, Groq
 from pipeline.channel_presets import ChannelPreset
 from pipeline.story_history import history_prompt_block
 
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "qwen/qwen3.6-27b")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
 
 
 # ── Language-specific word-count guidance ──────────────────────────────
@@ -39,6 +40,62 @@ DEFAULT_MIN_WORDS = {"hi": 80, "en": 80}
 
 def _lang_label(lang: str) -> str:
     return {"en": "English", "hi": "Hindi (Devanagari script)"}.get(lang, lang)
+
+
+def _clean_json_text(text: str) -> str:
+    """Extract and clean raw JSON from LLM output (strips markdown fences and repairs syntax)."""
+    text = text.strip()
+    # Strip markdown fences if present
+    if "```" in text:
+        match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text, re.IGNORECASE)
+        if match:
+            text = match.group(1).strip()
+        else:
+            text = text.replace("```json", "").replace("```", "").strip()
+
+    # Extract outermost JSON object { ... }
+    first_brace = text.find("{")
+    last_brace = text.rfind("}")
+    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+        text = text[first_brace : last_brace + 1]
+
+    # Remove trailing commas before closing braces/brackets
+    text = re.sub(r",\s*([\}\]])", r"\1", text)
+    return text
+
+
+def _parse_json_safely(raw: str) -> dict[str, Any]:
+    """Parse JSON with multiple cleanup passes."""
+    if not raw or not raw.strip():
+        raise ValueError("Empty response string received from Groq")
+
+    # 1. Direct JSON parse
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            return data
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    # 2. Parse after cleaning markdown fences and trailing commas
+    cleaned = _clean_json_text(raw)
+    try:
+        data = json.loads(cleaned)
+        if isinstance(data, dict):
+            return data
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    # 3. Handle unescaped newlines in JSON strings
+    try:
+        repaired = re.sub(r'(?<!\\)\n', r'\\n', cleaned)
+        data = json.loads(repaired)
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+
+    raise ValueError(f"Could not parse valid JSON object from response: {raw[:200]!r}")
 
 
 def generate_short_pack(
@@ -97,9 +154,9 @@ def _generate_single(preset: ChannelPreset, user: str, n: int) -> dict[str, Any]
     user += f"""
 Return ONLY valid JSON with this shape:
 {{
-  "youtube_title": "catchy title under 55 characters with 1-2 relevant horror/spooky emojis (no hashtags)",
+  "youtube_title": "catchy title under 55 characters with 1-2 relevant emojis (no hashtags)",
   "youtube_description": "2-3 sentences plus optional #Shorts at end",
-  "pinned_comment": "creepy or engaging open-ended question (under 200 characters) to pin in the comments to drive discussion",
+  "pinned_comment": "engaging open-ended question (under 200 characters) to pin in the comments to drive discussion",
   {narration_rule},
   "image_prompts": [
     "visual description for image 1: setting, subject, action. No style words. No text in image.",
@@ -114,8 +171,8 @@ STRICT RULES:
 - Image prompts are just visuals — no narration text, no style words, no quotes.
 - The narration must flow naturally as one spoken piece (no "segment 1", "segment 2" etc).
 - The FIRST sentence must be a hard hook: a direct question, a disturbing claim, or a curiosity gap.
-- Reveal the creepiest detail only near the final third; do not explain the mystery too early.
-- The LAST sentence should invite comments or follows in a natural horror-channel voice, without hashtags.
+- Reveal the climax or key mystery only near the final third; do not explain everything too early.
+- The LAST sentence should invite comments or follows in a natural channel voice, without hashtags.
 """
 
     max_attempts = 3
@@ -278,45 +335,71 @@ def _call_groq(
     *,
     temperature: float = 0.85,
 ) -> dict[str, Any]:
-    client = Groq(api_key=os.environ["GROQ_API_KEY"])
-    json_repair_instruction = (
-        "\n\nIMPORTANT: Output must be STRICT valid JSON only. "
-        "Do not include markdown fences, extra prose, or trailing commas."
+    api_key = os.environ.get("GROQ_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("GROQ_API_KEY environment variable is not set or is empty.")
+
+    client = Groq(api_key=api_key)
+    model = os.environ.get("GROQ_MODEL", GROQ_MODEL).strip() or GROQ_MODEL
+
+    system_prompt = preset["groq_system_hint"]
+    if "JSON" not in system_prompt:
+        system_prompt = (
+            "You are a professional YouTube scriptwriter. Respond in valid JSON format only.\n"
+            f"{system_prompt}"
+        )
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user},
+    ]
+
+    is_reasoning_model = any(
+        kw in model.lower()
+        for kw in ("qwen", "deepseek", "r1", "gpt-oss", "reasoning", "qwq")
     )
 
-    for attempt in range(3):
-        retry_user = user if attempt == 0 else user + json_repair_instruction
+    strategies: list[dict[str, Any]] = []
+    if is_reasoning_model:
+        # Strategy 1: JSON mode with parsed reasoning (standard for Qwen 3.6 / DeepSeek R1 on Groq)
+        strategies.append({"response_format": {"type": "json_object"}, "reasoning_format": "parsed"})
+        # Strategy 2: JSON mode with reasoning effort disabled
+        strategies.append({"response_format": {"type": "json_object"}, "reasoning_effort": "none"})
+        # Strategy 3: Standard JSON mode
+        strategies.append({"response_format": {"type": "json_object"}})
+        # Strategy 4: Unconstrained text mode with robust regex parser fallback
+        strategies.append({})
+    else:
+        # Strategy 1: Standard JSON mode for non-reasoning models
+        strategies.append({"response_format": {"type": "json_object"}})
+        # Strategy 2: Unconstrained text mode with robust regex parser fallback
+        strategies.append({})
+
+    last_err: Exception | None = None
+
+    for attempt_idx, strat in enumerate(strategies):
         try:
-            resp = client.chat.completions.create(
-                model=GROQ_MODEL,
-                messages=[
-                    {"role": "system", "content": preset["groq_system_hint"]},
-                    {"role": "user", "content": retry_user},
-                ],
-                temperature=temperature,
-                max_tokens=3072,
-                response_format={"type": "json_object"},
-            )
+            call_kwargs: dict[str, Any] = {
+                "model": model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": 3072,
+                **strat,
+            }
+            resp = client.chat.completions.create(**call_kwargs)
+            raw = resp.choices[0].message.content or ""
+            if not raw.strip():
+                continue
+            return _parse_json_safely(raw)
         except BadRequestError as e:
+            last_err = e
             msg = str(e)
-            if (
-                "json_validate_failed" in msg
-                or "Failed to validate JSON" in msg
-            ) and attempt < 2:
-                continue
-            raise
+            print(f"   ⚠ Groq strategy {attempt_idx + 1}/{len(strategies)} failed: {msg[:120]}… retrying with fallback strategy.")
+            continue
+        except Exception as e:
+            last_err = e
+            print(f"   ⚠ Groq request error: {e}… trying next strategy.")
+            continue
 
-        raw = resp.choices[0].message.content
-        if not raw:
-            if attempt < 2:
-                continue
-            raise RuntimeError("Empty Groq response")
+    raise RuntimeError(f"Groq JSON generation failed across all fallback strategies. Last error: {last_err}")
 
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            if attempt < 2:
-                continue
-            raise
-
-    raise RuntimeError("Groq JSON generation failed after retries")
