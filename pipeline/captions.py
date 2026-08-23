@@ -1,10 +1,11 @@
-"""Build SRT captions from Edge TTS sentence-level timestamps.
+"""Build SRT and ASS captions from Edge TTS sentence-level timestamps.
 
-Splits each sentence into word groups (~6-8 words) and distributes
+Splits each sentence into word groups (~3-5 words) and distributes
 timing proportionally within the sentence's known time window.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -12,8 +13,8 @@ if TYPE_CHECKING:
     from pipeline.edge_tts_synth import SentenceTiming
 
 
-def _fmt(ms: int) -> str:
-    """Milliseconds -> SRT timestamp."""
+def _fmt_srt(ms: int) -> str:
+    """Milliseconds -> SRT timestamp (00:00:00,000)."""
     h = ms // 3_600_000
     m = (ms % 3_600_000) // 60_000
     s = (ms % 60_000) // 1_000
@@ -21,23 +22,32 @@ def _fmt(ms: int) -> str:
     return f"{h:02d}:{m:02d}:{s:02d},{frac:03d}"
 
 
-def build_srt(
+def _fmt_ass(ms: int) -> str:
+    """Milliseconds -> ASS timestamp (0:00:00.00)."""
+    h = ms // 3_600_000
+    m = (ms % 3_600_000) // 60_000
+    s = (ms % 60_000) // 1_000
+    cs = (ms % 1_000) // 10
+    return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
+
+
+def _srt_time_to_ms(t_str: str) -> int:
+    """Convert SRT time string (00:00:01,250) to milliseconds."""
+    t_str = t_str.strip().replace(",", ".")
+    parts = t_str.split(":")
+    h = int(parts[0])
+    m = int(parts[1])
+    s_parts = parts[2].split(".")
+    s = int(s_parts[0])
+    ms = int(s_parts[1].ljust(3, "0")[:3])
+    return (h * 3600 + m * 60 + s) * 1000 + ms
+
+
+def _split_into_chunks(
     sentences: list[SentenceTiming],
-    out_path: Path,
-    total_duration: float,
-    *,
     max_words_per_line: int = 4,
-) -> Path:
-    """Create .srt from sentence timestamps, splitting long sentences."""
-    out_path = Path(out_path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
-    if not sentences:
-        out_path.write_text("", encoding="utf-8")
-        return out_path
-
+) -> list[tuple[int, int, str]]:
     chunks: list[tuple[int, int, str]] = []
-
     for sent in sentences:
         words = sent["text"].split()
         if not words:
@@ -65,12 +75,85 @@ def build_srt(
                 chunks.append((t_start, t_end, grp_text))
                 pos = grp_end
 
+    return chunks
+
+
+def build_srt(
+    sentences: list[SentenceTiming],
+    out_path: Path,
+    total_duration: float,
+    *,
+    max_words_per_line: int = 4,
+) -> Path:
+    """Create .srt from sentence timestamps, splitting long sentences."""
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if not sentences:
+        out_path.write_text("", encoding="utf-8")
+        return out_path
+
+    chunks = _split_into_chunks(sentences, max_words_per_line=max_words_per_line)
     lines: list[str] = []
     for i, (start, end, text) in enumerate(chunks):
         lines.append(str(i + 1))
-        lines.append(f"{_fmt(start)} --> {_fmt(end)}")
+        lines.append(f"{_fmt_srt(start)} --> {_fmt_srt(end)}")
         lines.append(text)
         lines.append("")
 
     out_path.write_text("\n".join(lines), encoding="utf-8")
     return out_path
+
+
+def srt_to_ass(
+    srt_path: Path,
+    ass_path: Path,
+    *,
+    font_name: str = "Creepster",
+    font_size: int = 72,
+    margin_v: int = 460,
+    width: int = 1080,
+    height: int = 1920,
+) -> Path:
+    """Convert an existing .srt file to .ass with exact 1080x1920 canvas resolution."""
+    srt_path = Path(srt_path)
+    ass_path = Path(ass_path)
+    ass_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if not srt_path.is_file():
+        ass_path.write_text("", encoding="utf-8")
+        return ass_path
+
+    srt_text = srt_path.read_text(encoding="utf-8").strip()
+    blocks = re.split(r"\n\s*\n", srt_text)
+
+    events: list[str] = []
+    for b in blocks:
+        lines = [ln.strip() for ln in b.splitlines() if ln.strip()]
+        if len(lines) >= 3 and "-->" in lines[1]:
+            t_match = re.match(r"(\S+)\s*-->\s*(\S+)", lines[1])
+            if t_match:
+                start_ms = _srt_time_to_ms(t_match.group(1))
+                end_ms = _srt_time_to_ms(t_match.group(2))
+                text = " ".join(lines[2:]).replace("\n", " ").strip()
+                events.append(
+                    f"Dialogue: 0,{_fmt_ass(start_ms)},{_fmt_ass(end_ms)},Default,,0,0,0,,{text}"
+                )
+
+    ass_header = f"""[Script Info]
+ScriptType: v4.00+
+PlayResX: {width}
+PlayResY: {height}
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,{font_name},{font_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,5,0,2,40,40,{margin_v},1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+    ass_content = ass_header + "\n".join(events) + "\n"
+    ass_path.write_text(ass_content, encoding="utf-8")
+    return ass_path
+

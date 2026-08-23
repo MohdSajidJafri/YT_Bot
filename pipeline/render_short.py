@@ -127,6 +127,8 @@ def render_vertical_short(
         list(executor.map(generate_clip, range(n)))
 
     # ── 3. Prepare subtitles + font ──────────────────────────────────
+    from pipeline.captions import srt_to_ass
+
     shutil.copyfile(srt_path, tmp / "captions.srt")
 
     font_path = FONTS_DIR / font_file
@@ -140,19 +142,21 @@ def render_vertical_short(
         fontsdir_arg = ":fontsdir='_fonts'"
     else:
         print(f"   ⚠ Font {font_path} not found — using {rendered_font_name}")
+
     overlay_font_arg = ""
     if font_path.is_file():
         overlay_font_arg = f"fontfile='{(Path('_fonts') / font_path.name).as_posix()}':"
 
-    force_style = (
-        f"FontName={rendered_font_name},"
-        f"FontSize=68,"
-        f"PrimaryColour=&H00FFFFFF,"
-        f"OutlineColour=&H00000000,"
-        f"BackColour=&H9A000000,"
-        f"BorderStyle=4,Outline=2,Bold=1,"
-        f"Shadow=0,Alignment=2,"
-        f"MarginV=550,MarginL=28,MarginR=28"
+    # Convert SRT to ASS with exact canvas coordinates (1080x1920) so captions are never clipped/offscreen
+    ass_path = tmp / "captions.ass"
+    srt_to_ass(
+        srt_path,
+        ass_path,
+        font_name=rendered_font_name,
+        font_size=72,
+        margin_v=460,
+        width=width,
+        height=height,
     )
 
     bg_music_path = REPO_ROOT / "assets" / "audio" / "leberch-psychological-horror-520373.mp3"
@@ -188,8 +192,7 @@ def render_vertical_short(
     sub_label = "subs"
     if n == 1:
         filter_parts.append(
-            f"[0:v]subtitles=captions.srt{fontsdir_arg}:"
-            f"force_style='{force_style}'[{sub_label}]"
+            f"[0:v]subtitles=captions.ass{fontsdir_arg}[{sub_label}]"
         )
     else:
         prev = "[0:v]"
@@ -203,8 +206,7 @@ def render_vertical_short(
             )
             prev = out
         filter_parts.append(
-            f"{prev}subtitles=captions.srt{fontsdir_arg}:"
-            f"force_style='{force_style}'[{sub_label}]"
+            f"{prev}subtitles=captions.ass{fontsdir_arg}[{sub_label}]"
         )
 
     # Retention overlays: fast title/hook at open, CTA at close. Optional args keep

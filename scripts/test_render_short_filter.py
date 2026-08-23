@@ -65,6 +65,7 @@ def main() -> None:
     assert f"between(t,0,{TITLE_OVERLAY_SECONDS:.2f})" in fc
     assert f"between(t,0.15,{HOOK_OVERLAY_SECONDS:.2f})" in fc
     assert "gte(t," in fc
+    assert "subtitles=captions.ass" in fc
     assert "amix=inputs=2:duration=first" in fc
     assert "volume=0.08" in fc
     print("render_short filter expression escaping test passed")
