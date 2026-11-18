@@ -43,12 +43,47 @@ def _srt_time_to_ms(t_str: str) -> int:
     return (h * 3600 + m * 60 + s) * 1000 + ms
 
 
+def _is_word_level(cues: list[SentenceTiming]) -> bool:
+    """Check if cues contain individual words (WordBoundary) vs full sentences."""
+    if not cues:
+        return False
+    sample = cues[:min(10, len(cues))]
+    avg_words = sum(len(c["text"].split()) for c in sample) / len(sample)
+    return avg_words <= 1.5
+
+
 def _split_into_chunks(
-    sentences: list[SentenceTiming],
+    cues: list[SentenceTiming],
     max_words_per_line: int = 3,
 ) -> list[tuple[int, int, str]]:
     chunks: list[tuple[int, int, str]] = []
-    for sent in sentences:
+    if not cues:
+        return chunks
+
+    # Fast path: WordBoundary cues with microsecond-level precision
+    if _is_word_level(cues):
+        curr: list[SentenceTiming] = []
+        for w in cues:
+            txt = w["text"].strip()
+            if not txt:
+                continue
+            curr.append(w)
+            is_punct = any(txt.endswith(p) for p in (".", "!", "?", ",", ";", ":", "—", "-"))
+            if len(curr) >= max_words_per_line or is_punct:
+                s = curr[0]["offset_ms"]
+                e = curr[-1]["offset_ms"] + curr[-1]["duration_ms"]
+                t = " ".join(item["text"].strip() for item in curr)
+                chunks.append((s, e, t))
+                curr = []
+        if curr:
+            s = curr[0]["offset_ms"]
+            e = curr[-1]["offset_ms"] + curr[-1]["duration_ms"]
+            t = " ".join(item["text"].strip() for item in curr)
+            chunks.append((s, e, t))
+        return chunks
+
+    # Fallback path: SentenceBoundary cues (evenly distributed)
+    for sent in cues:
         words = sent["text"].split()
         if not words:
             continue

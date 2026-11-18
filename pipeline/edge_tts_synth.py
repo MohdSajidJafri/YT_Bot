@@ -16,17 +16,23 @@ class SentenceTiming(TypedDict):
     duration_ms: int
 
 
-def _ffprobe_duration(path: Path) -> float:
-    out = subprocess.check_output(
-        [
-            "ffprobe", "-v", "error",
-            "-show_entries", "format=duration",
-            "-of", "default=noprint_wrappers=1:nokey=1",
-            str(path),
-        ],
-        text=True,
-    ).strip()
-    return float(out)
+def _ffprobe_duration(path: Path, fallback_dur: float = 0.0) -> float:
+    import shutil
+    if not shutil.which("ffprobe"):
+        return fallback_dur
+    try:
+        out = subprocess.check_output(
+            [
+                "ffprobe", "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                str(path),
+            ],
+            text=True,
+        ).strip()
+        return float(out)
+    except Exception:
+        return fallback_dur
 
 
 async def _synthesize_with_timing(
@@ -34,13 +40,23 @@ async def _synthesize_with_timing(
 ) -> list[SentenceTiming]:
     import edge_tts
 
-    communicate = edge_tts.Communicate(text, voice)
+    # Request WordBoundary for frame-perfect millisecond word synchronization
+    communicate = edge_tts.Communicate(text, voice, boundary="WordBoundary")
+    words: list[SentenceTiming] = []
     sentences: list[SentenceTiming] = []
 
     with open(out_path, "wb") as audio_file:
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":
                 audio_file.write(chunk["data"])
+            elif chunk["type"] == "WordBoundary":
+                words.append(
+                    SentenceTiming(
+                        text=chunk["text"],
+                        offset_ms=int(chunk["offset"]) // 10_000,
+                        duration_ms=int(chunk["duration"]) // 10_000,
+                    )
+                )
             elif chunk["type"] == "SentenceBoundary":
                 sentences.append(
                     SentenceTiming(
@@ -50,7 +66,8 @@ async def _synthesize_with_timing(
                     )
                 )
 
-    return sentences
+    # Prefer exact word-level boundaries; fallback to sentence-level if voice doesn't emit words
+    return words if words else sentences
 
 
 def synthesize_full(
@@ -67,6 +84,7 @@ def synthesize_full(
     voice = voice or os.environ.get("EDGE_TTS_VOICE", VOICE)
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    sentences = asyncio.run(_synthesize_with_timing(text, out_path, voice))
-    dur = _ffprobe_duration(out_path)
-    return dur, sentences
+    cues = asyncio.run(_synthesize_with_timing(text, out_path, voice))
+    fallback_dur = (cues[-1]["offset_ms"] + cues[-1]["duration_ms"]) / 1000.0 if cues else 0.0
+    dur = _ffprobe_duration(out_path, fallback_dur=fallback_dur) or fallback_dur
+    return dur, cues

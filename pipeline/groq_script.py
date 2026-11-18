@@ -178,6 +178,8 @@ Return ONLY valid JSON with this shape:
 {{
   "youtube_title": "high-CTR curiosity-gap title under 55 characters (e.g. warning, impossible mystery, or first-person eerie encounter) with 1 relevant emoji (no hashtags)",
   "youtube_description": "2-3 suspenseful sentences setting the stage + #Shorts",
+  "opening_hook": "first sentence / hook of the story (under 15 words)",
+  "ending_bridge": "ending phrase with NO trailing period (under 15 words) that connects grammatically into opening_hook",
   "pinned_comment": "a provocative open-ended question (under 160 characters) asking viewers what they would do in this exact situation to spark comments",
   {narration_rule},
   "image_prompts": [
@@ -194,7 +196,7 @@ STRICT RULES:
 - The narration must flow naturally as one spoken piece (no "segment 1", "segment 2" etc).
 - The FIRST sentence must be a hard hook: a direct question, a disturbing claim, or a curiosity gap.
 - Reveal the climax or key mystery only near the final third; do not explain everything too early.
-- The LAST sentence must deliver the final chilling punchline or loop cleanly into sentence 1. NEVER include outro phrases like 'subscribe', 'follow for more', or 'like this video'.
+- SEAMLESS INFINITE LOOP: full_narration must start with opening_hook and conclude with ending_bridge (NO period at the very end). The phrase ending_bridge + opening_hook must form a complete, natural sentence so the video loops endlessly without the viewer noticing where it ended.
 - ZERO EMOJIS: full_narration must contain ABSOLUTELY ZERO emojis, zero symbols, and zero stage directions (like [laughter] or *whispers*). Emojis cause speech synthesis errors. Plain spoken words only.
 """
 
@@ -214,6 +216,8 @@ STRICT RULES:
 
         try:
             narration = sanitize_narration(data.get("full_narration", ""))
+            if preset.get("id") == "ghost_stories":
+                narration = narration.rstrip(".!? ")
             data["full_narration"] = narration
             if not narration:
                 raise ValueError("Missing full_narration")
