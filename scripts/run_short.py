@@ -37,12 +37,21 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from dotenv import load_dotenv
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
-load_dotenv(REPO_ROOT / ".env")
-load_dotenv(REPO_ROOT / "scripts" / ".env")
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv(REPO_ROOT / ".env")
+    load_dotenv(REPO_ROOT / "scripts" / ".env")
+except ImportError:
+    for env_path in (REPO_ROOT / ".env", REPO_ROOT / "scripts" / ".env"):
+        if env_path.is_file():
+            for line in env_path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    os.environ.setdefault(k.strip(), v.strip())
 
 from pipeline.captions import build_srt
 from pipeline.channel_presets import get_preset, list_channel_ids
@@ -100,11 +109,14 @@ def _render_and_upload(
 
     video_path = run_dir / f"short{suffix}.mp4"
     print(f"⑤ FFmpeg: rendering 1080×1920 (font={font_name})…")
+    # For narrative horror loops, suppress CTA overlay to maintain infinite retention loop
+    cta = None if channel_id == "ghost_stories" else "SUBSCRIBE FOR MORE"
     render_vertical_short(
         image_paths, total_dur, audio_path, srt_path, video_path,
         font_file=font_file, font_name=font_name,
         title_text=title,
         hook_text=_first_sentence(narration),
+        cta_text=cta,
     )
     print(f"   → {video_path}")
 
@@ -193,7 +205,7 @@ def main() -> None:
 
     # ── 2. Images via DeAPI (generated ONCE, shared by all variants) ──
     w = int(os.environ.get("DEAPI_IMAGE_WIDTH", "768"))
-    h = int(os.environ.get("DEAPI_IMAGE_HEIGHT", "768"))
+    h = int(os.environ.get("DEAPI_IMAGE_HEIGHT", "1360"))
     style_suffix = preset.get("image_style_suffix")
     negative = (
         os.environ.get("IMAGE_NEGATIVE_PROMPT")
@@ -243,8 +255,8 @@ def main() -> None:
             title=title,
             description=pack.get("youtube_description", ""),
             voice=preset.get("tts_voice") or os.environ.get("EDGE_TTS_VOICE"),
-            font_file=preset.get("caption_font", "CreepsterCaps.ttf"),
-            font_name=preset.get("caption_font_name", "Creepster"),
+            font_file=preset.get("caption_font", "BebasNeue-Regular.ttf"),
+            font_name=preset.get("caption_font_name", "Bebas Neue"),
             image_paths=image_paths,
             run_dir=run_dir,
             suffix="",

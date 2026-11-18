@@ -67,7 +67,7 @@ def main() -> None:
     assert "gte(t," in fc
     assert "subtitles=captions.ass" in fc
     assert "amix=inputs=2:duration=first" in fc
-    assert "volume=0.08" in fc
+    assert "volume=0.12" in fc
     print("render_short filter expression escaping test passed")
 
     # Clean up dummy downloaded bg music in test if it was created

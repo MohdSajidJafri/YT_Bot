@@ -45,7 +45,7 @@ def _srt_time_to_ms(t_str: str) -> int:
 
 def _split_into_chunks(
     sentences: list[SentenceTiming],
-    max_words_per_line: int = 4,
+    max_words_per_line: int = 3,
 ) -> list[tuple[int, int, str]]:
     chunks: list[tuple[int, int, str]] = []
     for sent in sentences:
@@ -83,7 +83,7 @@ def build_srt(
     out_path: Path,
     total_duration: float,
     *,
-    max_words_per_line: int = 4,
+    max_words_per_line: int = 3,
 ) -> Path:
     """Create .srt from sentence timestamps, splitting long sentences."""
     out_path = Path(out_path)

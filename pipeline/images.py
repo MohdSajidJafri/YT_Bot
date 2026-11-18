@@ -118,7 +118,7 @@ def save_scene_image(
     out_path: Path,
     *,
     width: int = 768,
-    height: int = 768,
+    height: int = 1360,
     negative: str = DEFAULT_NEGATIVE,
 ) -> tuple[str, str]:
     """Generate and save one image. Returns (status, detail)."""
@@ -146,17 +146,26 @@ def save_scene_image(
     # Pollinations.ai Fallback
     import urllib.parse
     import random
+    import re
     encoded_prompt = urllib.parse.quote(prompt)
     url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={width}&height={height}&nologo=true&private=true"
 
     last_poll_err = None
     for attempt in range(5):
         try:
-            with httpx.Client(timeout=60.0) as client:
+            with httpx.Client(timeout=60.0, follow_redirects=True) as client:
                 resp = client.get(url)
-                if resp.status_code == 429:
-                    wait_time = 10 * (attempt + 1) + random.uniform(1, 5)
-                    print(f"      Pollinations 429 (try {attempt + 1}/5) — waiting {wait_time:.1f}s…")
+                if resp.status_code in (402, 429):
+                    wait_time = 46
+                    try:
+                        err_data = resp.json()
+                        msg = err_data.get("error", {}).get("message", "")
+                        match = re.search(r"Retry after (\d+)s", msg)
+                        if match:
+                            wait_time = int(match.group(1)) + 2
+                    except Exception:
+                        pass
+                    print(f"      Pollinations rate limit ({resp.status_code}) — waiting {wait_time}s (try {attempt + 1}/5)…")
                     time.sleep(wait_time)
                     continue
                 resp.raise_for_status()

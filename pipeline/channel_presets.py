@@ -307,23 +307,27 @@ PRESETS: dict[str, ChannelPreset] = {
     "ghost_stories": {
         "id": "ghost_stories",
         "label": "Ghost / horror storytime Short",
-        "min_words": 100,
+        "min_words": 105,
+        "caption_font": "BebasNeue-Regular.ttf",
+        "caption_font_name": "Bebas Neue",
         "groq_system_hint": (
-            "You are a professional YouTube Shorts scriptwriter. Respond in valid JSON format only. "
-            "You write spooky ghost story Shorts for YouTube. "
-            "CRITICAL LENGTH RULE: The full_narration must be ONE continuous paragraph containing 120-140 words. "
-            "This produces 35-45 seconds of spoken audio. "
-            "RETENTION RULE: The FIRST sentence must stop scrolling immediately: ask a creepy question, "
-            "make a disturbing claim, or open with an impossible detail. No slow setup. "
-            "LOOPING RULE: Write the script as a seamless loop. The final sentence must flow directly, logically, "
-            "and grammatically into the first hook sentence, so the loop is invisible and continuous. "
-            "Avoid ending with 'Follow for more' if it disrupts the seamless loop. "
-            "Use curiosity gaps: hint that something is wrong, delay the explanation, then reveal the worst detail late. "
-            "Tone: eerie, suspenseful, creepy but NOT gory or violent. "
-            "Include exactly 6 image prompts corresponding to the visual story beats. "
-            "All stories fictional. Original characters. PG-13. No hashtags in narration."
+            "You are a master YouTube Shorts horror storyteller and viral scriptwriter. Respond in valid JSON format only. "
+            "You write gripping, spine-chilling horror story Shorts designed for maximum retention on YouTube. "
+            "CRITICAL LENGTH RULE: The full_narration must be ONE continuous paragraph containing 125-145 words "
+            "(producing ~38-48 seconds of spoken narration). "
+            "ZERO EMOJIS IN NARRATION: Never put emojis or symbols inside narration; emojis cause the voice synthesizer to hallucinate and glitch. "
+            "RETENTION HOOK RULE: The FIRST sentence must stop the scroll instantly (within 1.5 seconds) using a high-urgency warning, "
+            "a bizarre rule, an uncanny detail, or a first-person encounter. No greeting, no intro fluff. "
+            "SEAMLESS INFINITE LOOP RULE: The script MUST be written as an infinite loop. The final sentence must flow grammatically, "
+            "tonally, and logically straight back into the very first hook sentence, so the repeat is completely invisible. "
+            "ABSOLUTELY NO OUTRO: Do NOT end with 'subscribe', 'follow for more', 'leave a comment', or any YouTuber phrases in narration. "
+            "TENSION PACING: Escalate tension with every beat. Drop a chilling twist or terrifying revelation in the final third. "
+            "Include exactly 8 image prompts matching the chronological visual story beats. "
+            "IMAGE PROMPTS: English only. Describe concrete visual scenes (subjects, eerie lighting, dark environment). "
+            "No style keywords or text in images. "
+            "Tone: eerie, psychological, suspenseful, uncanny (PG-13, no graphic gore or hate)."
         ),
-        "segment_count": 6,
+        "segment_count": 8,
         "image_style_suffix": (
             ", dark spooky cartoon illustration, eerie atmosphere, creepy stylized art, "
             "bold outlines, muted haunting colors, horror cartoon aesthetic, ghostly shadows, "
@@ -361,6 +365,20 @@ PRESETS: dict[str, ChannelPreset] = {
             "an old family photograph where one dead relative keeps turning around",
             "a foggy mountain road where the same hitchhiker appears after every turn",
             "a summer camp rulebook with one rule written in fresh handwriting",
+            "a night shift security guard watching a camera feed that is 10 seconds ahead of reality",
+            "an emergency broadcast alarm sounding on a sunny afternoon warning everyone to avoid reflective surfaces",
+            "a smart home speaker that starts answering questions no one in the room asked",
+            "a baby monitor that catches an unfamiliar voice softly singing a lullaby",
+            "a GPS navigation system redirecting a lone driver down an unmapped dirt road at 2 AM",
+            "an old Polaroid camera where the developed photo always shows a shadow standing right behind you",
+            "a sleep tracker app that records two heartbeats in a single person's bed",
+            "a flight attendant noticing a passenger sitting in seat 13B on an airplane with no row 13",
+            "a trail cam in deep woods capturing a figure wearing clothes that went missing from your closet",
+            "a deep sea research pod where something taps rhythmically on the glass in Morse code",
+            "a funeral where every mourner receives a text message sent from the deceased person's phone",
+            "a car rear-view mirror where the headlights behind you never turn or pass",
+            "a lighthouse keeper whose logbook shows entries written in their own handwriting that they don't remember",
+            "a hotel elevator where pressing 'Door Close' traps you between floors while something scratches above",
         ],
     },
 }

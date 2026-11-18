@@ -1,141 +1,130 @@
 # YouTube Shorts Bot
 
-Fully automated: **Groq script → Edge TTS voice → AI images → captions → FFmpeg → YouTube upload**, daily via GitHub Actions.
+Fully automated YouTube Shorts production pipeline: **AI Script (GPT-4o-mini / Groq fallback) → Edge TTS voiceover → FLUX AI images → Dynamic captions → FFmpeg 9:16 render → YouTube Data API upload**, scheduled daily via GitHub Actions.
+
+---
 
 ## Architecture
 
 ```
-scripts/run_short.py          ← orchestrator
-  pipeline/groq_script.py     ← Groq LLM writes the Short script (JSON)
-  pipeline/edge_tts_synth.py  ← Edge TTS: free voice, per-segment MP3
-  pipeline/images.py          ← DeAPI.ai image gen (Pollinations fallback)
-  pipeline/captions.py        ← SRT from segment timings
-  pipeline/render_short.py    ← FFmpeg: slideshow + audio + burned captions
+scripts/run_short.py          ← Orchestrator
+  pipeline/groq_script.py     ← Scriptwriting (Primary: GPT-4o-mini / Fallback: Groq Cloud)
+  pipeline/edge_tts_synth.py  ← Edge TTS: audio synthesis + millisecond sentence boundary timings
+  pipeline/images.py          ← DeAPI.ai (Flux) image generation with Pollinations fallback
+  pipeline/captions.py        ← Mathematical word timing, 2-3 word bursts, Bebas Neue ASS captions
+  pipeline/render_short.py    ← FFmpeg: 9:16 full-bleed Ken Burns zoom + audio mixing + burned subs
   pipeline/youtube_upload.py  ← YouTube Data API v3 upload
-  pipeline/channel_presets.py ← niche presets (ghost_stories, facts, etc.)
+  pipeline/channel_presets.py ← Channel presets, viral prompt rules, and topic pools
 ```
 
-## Quick Start (local)
+---
+
+## Key Features & Optimizations
+
+* **Priority + Fallback Scripting**: Uses `gpt-4o-mini` (via OpenAI or ChatAnywhere) as the primary scriptwriter. If quota is exhausted or rate-limited, it automatically falls back to Groq Cloud without halting the pipeline.
+* **Full-Bleed 9:16 Immersion**: Renders native vertical visuals (`768×1360` scaled to `1080×1920`) with **zero black letterboxing**.
+* **Seamless Infinite Looping**: Scripts are mathematically structured so the final sentence connects grammatically back into the opening hook, maximizing watch time and retention past 100%.
+* **TTS Emoji Sanitizer**: Automatic regex stripping removes emojis, stage cues (like `[whispers]`), and markdown symbols before audio generation, preventing voice synthesizer hallucinations.
+* **High-Readability Typography**: High-contrast, bold Bebas Neue subtitles split into rapid 2–3 word bursts, positioned safely above the YouTube Shorts interface buttons.
+* **Dynamic Visual Pacing**: Generates 8 scene beats per Short (~4.5 seconds per image) to keep viewers visually engaged and eliminate mid-video swipe-aways.
+
+---
+
+## Quick Start (Local Setup)
 
 ```bash
 git clone <this-repo>
-cd Youtube_bot
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+cd YT_Bot
+python -m venv .venv
 
-# Copy and fill in your keys:
+# Activate venv:
+# Windows (PowerShell):
+.venv\Scripts\Activate.ps1
+# Mac / Linux:
+source .venv/bin/activate
+
+pip install -r requirements.txt
+
+# Copy example environment configuration:
 cp .env.example .env
-# edit .env → add GROQ_API_KEY, DEAPI_TOKEN
-
-# Install ffmpeg if needed:
-brew install ffmpeg         # macOS
-# sudo apt install ffmpeg   # Ubuntu
-
-# Generate a ghost story Short (no upload):
-.venv/bin/python scripts/run_short.py --channel ghost_stories
-
-# Output → output/runs/ghost_stories_<timestamp>/short.mp4
+# Edit .env and paste your API keys
 ```
 
-## Free API Keys You Need
+### Helpful Test Utilities
 
-| Service | Free? | What for | Get it here |
-|---------|-------|----------|-------------|
-| **Groq** | ✅ free tier | Script generation (LLM) | https://console.groq.com/keys |
-| **DeAPI.ai** | ⚠️ Paid key (Flux) | Image generation | https://deapi.ai (falls back to Pollinations if unset) |
-| **Pollinations** | ✅ 100% free | Image fallback | No key needed |
-| **Edge TTS** | ✅ 100% free | Voice / audio | No key needed — uses Microsoft Edge voices |
-| **FFmpeg** | ✅ open source | Video render | `brew install ffmpeg` or `apt install ffmpeg` |
-| **YouTube API** | ✅ free | Upload | Google Cloud Console (see below) |
+* **Test Script Generation (5s test)**:
+  ```bash
+  python scripts/test_script_generation.py ghost_stories
+  ```
+* **Check Supported Models on your Key**:
+  ```bash
+  python scripts/check_openai_models.py
+  ```
+* **Test Free Image Generation**:
+  ```bash
+  python scripts/test_pollinations_images.py
+  ```
 
-## YouTube Upload Setup (one-time)
+---
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a project (or pick existing)
-3. Enable **YouTube Data API v3**: [direct link](https://console.cloud.google.com/apis/library/youtube.googleapis.com)
-4. Go to **Credentials** → **Create OAuth client ID** → choose **Desktop app**
-5. Download the JSON → save as `secrets/client_secret.json`
-6. Run the auth helper:
+## API Keys & Services
 
-```bash
-.venv/bin/python scripts/youtube_auth.py
-```
+| Service | Free? | What It's Used For | Where to Get It |
+| :--- | :--- | :--- | :--- |
+| **OpenAI / ChatAnywhere** | ✅ Free tier | Primary scriptwriter (`gpt-4o-mini`) | [chatanywhere.org](https://chatanywhere.org) or [platform.openai.com](https://platform.openai.com) |
+| **Groq Cloud** | ✅ Free tier | Backup scriptwriter (`openai/gpt-oss-20b`) | [console.groq.com/keys](https://console.groq.com/keys) |
+| **DeAPI.ai** | ⚠️ Paid (~$0.01/video) | Primary Flux image generation | [deapi.ai](https://deapi.ai) |
+| **Pollinations.ai** | ✅ 100% Free | Automatic image generation fallback | No key required |
+| **Edge TTS** | ✅ 100% Free | Voiceover / speech synthesis | No key required (Microsoft Edge voices) |
+| **FFmpeg** | ✅ Open source | 9:16 video compilation & subtitle burning | `winget install Gyan.FFmpeg` or `brew install ffmpeg` |
+| **YouTube Data API** | ✅ Free | Automated video upload | Google Cloud Console |
 
-7. Browser opens → sign in → approve → token saved to `secrets/youtube_token.json`
-8. Now you can upload:
+---
 
-```bash
-.venv/bin/python scripts/run_short.py --channel ghost_stories --upload --privacy private
-```
+## YouTube Upload Setup (One-Time)
 
-## GitHub Actions (daily autopilot)
+1. Open [Google Cloud Console](https://console.cloud.google.com/) and create a project.
+2. Enable the **YouTube Data API v3**: [Direct Link](https://console.cloud.google.com/apis/library/youtube.googleapis.com).
+3. Go to **Credentials** → **Create Credentials** → **OAuth client ID** → choose **Desktop app**.
+4. Download the JSON and save it as `secrets/client_secret.json`.
+5. Run the authentication script:
+   ```bash
+   python scripts/youtube_auth.py
+   ```
+6. A browser opens → sign in to your YouTube channel's Google account → grant permission.
+7. The credentials will be saved to `secrets/youtube_token.json` and printed to your terminal.
 
-### Add these secrets to your repo:
+---
 
-Go to **repo → Settings → Secrets and variables → Actions → New repository secret**:
+## GitHub Actions (Daily Autopilot)
 
-| Secret name | Value |
-|-------------|-------|
-| `GROQ_API_KEY` | Your Groq key |
-| `DEAPI_TOKEN` | Your DeAPI token (optional fallback to Pollinations) |
-| `YT_CLIENT_ID` | Printed by `youtube_auth.py` |
-| `YT_CLIENT_SECRET_VALUE` | Printed by `youtube_auth.py` |
-| `YT_REFRESH_TOKEN` | Printed by `youtube_auth.py` |
+The workflow runs daily on GitHub Actions at **10:00 UTC** (or manually via the **Actions** tab).
 
-### Trigger
+### Required Secrets in GitHub:
+Navigate to **GitHub Repository → Settings → Secrets and variables → Actions → New repository secret**:
 
-- **Automatic**: runs daily at 10:00 UTC (edit cron in `.github/workflows/daily_short.yml`)
-- **Manual**: Actions tab → "Daily YouTube Short" → Run workflow → pick channel + topic
+| Secret Name | Required? | Value / Description |
+| :--- | :--- | :--- |
+| `OPENAI_API_KEY` | **Recommended** | Your ChatAnywhere or OpenAI API key (`sk-...`) |
+| `OPENAI_BASE_URL` | Optional | `https://api.chatanywhere.org/v1` (defaults to ChatAnywhere if unset) |
+| `OPENAI_MODEL` | Optional | `gpt-4o-mini` |
+| `GROQ_API_KEY` | **Required** | Your Groq Cloud API key (used as automatic fallback) |
+| `DEAPI_TOKEN` | Optional | Your DeAPI token (if unset, automatically uses free Pollinations) |
+| `YT_CLIENT_ID` | Required | Shared OAuth client ID from `youtube_auth.py` |
+| `YT_CLIENT_SECRET_VALUE` | Required | Shared OAuth client secret from `youtube_auth.py` |
+| `YT_REFRESH_TOKEN` | Required | Refresh token from `youtube_auth.py` |
 
-### Change channel / schedule
-
-Edit `.github/workflows/daily_short.yml`:
-- Change `cron: "0 10 * * *"` to your preferred time ([crontab.guru](https://crontab.guru/))
-- Change default channel in the `CHANNEL=` line
+---
 
 ## Channel Presets
 
-| `--channel` | Niche |
-|-------------|-------|
-| `ghost_stories` | Spooky / horror storytime |
-| `facts` | Interesting facts / trivia |
-| `school_story` | School drama / storytime |
-| `psych_tradeoff` | Psychology / habits |
-| `history_micro` | One moment in history |
+| Channel ID | Genre / Niche |
+| :--- | :--- |
+| `ghost_stories` | Spooky / paranormal horror storytime (infinite loop, 8 scenes) |
+| `facts` | Surprising, verified facts (bilingual Hindi + English support) |
+| `hindi_myth` | Respectful Hindi mythology & devotional shorts (calendar-based) |
+| `school_story` | School drama & suspense storytime |
+| `psych_tradeoff` | Everyday psychology, cognitive biases, and habit mechanics |
+| `history_micro` | Focused historical anecdotes and forgotten turning points |
 
-Add your own in `pipeline/channel_presets.py`.
-
-## Voices
-
-Edge TTS has dozens of free voices. List them:
-
-```bash
-.venv/bin/python -m edge_tts --list-voices | grep en-US
-```
-
-Set in `.env`:
-```
-EDGE_TTS_VOICE=en-US-GuyNeural        # casual male
-EDGE_TTS_VOICE=en-US-JennyNeural      # female
-EDGE_TTS_VOICE=en-US-ChristopherNeural # deep male (default)
-```
-
-## Multi-Channel
-
-For multiple channels: duplicate the workflow YAML, use different `CHANNEL=` defaults and separate `YT_*` secrets per channel (e.g. `YT_REFRESH_TOKEN_FACTS`, `YT_REFRESH_TOKEN_GHOST`). Each channel needs its own YouTube OAuth.
-
-## Cost
-
-| Component | Cost |
-|-----------|------|
-| Groq | Free tier (~$0) |
-| DeAPI / Pollinations | Paid / Free fallback (~$0) |
-| Edge TTS | $0 |
-| FFmpeg | $0 |
-| GitHub Actions | 2000 min/month free |
-| YouTube upload | $0 |
-| **Total** | **~$0/day** |
-
-Analytics of one of the channels — you can create hundreds like this
-<img width="807" height="548" alt="Screenshot 2026-06-11 at 12 20 29 PM" src="https://github.com/user-attachments/assets/09f2ed03-aa1e-43bc-bd0c-21c0df3a958e" />
-
+Customize or add new presets in [`pipeline/channel_presets.py`](file:///D:/YT/Horror/YT_Bot/pipeline/channel_presets.py).

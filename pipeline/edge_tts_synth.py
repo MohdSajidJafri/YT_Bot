@@ -57,6 +57,13 @@ def synthesize_full(
     text: str, out_path: Path, voice: str | None = None,
 ) -> tuple[float, list[SentenceTiming]]:
     """TTS the full narration. Returns (duration_seconds, sentence_timings)."""
+    # Sanitize text to remove emojis, symbols, or stage cues that cause TTS hallucination
+    import re
+    text = re.sub(r"[\U00010000-\U0010ffff\u2600-\u27bf\u2300-\u23ff\u2b50-\u2b55\ufe00-\ufe0f\u200d]+", "", text)
+    text = re.sub(r"\[.*?\]|\(.*?\)", "", text)
+    text = re.sub(r"[*_#~`]", "", text)
+    text = " ".join(text.split())
+
     voice = voice or os.environ.get("EDGE_TTS_VOICE", VOICE)
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)

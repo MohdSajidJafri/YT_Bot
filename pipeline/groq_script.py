@@ -11,7 +11,13 @@ import os
 import re
 from typing import Any
 
-from groq import BadRequestError, Groq
+import httpx
+
+try:
+    from groq import BadRequestError, Groq
+except ImportError:
+    Groq = None
+    BadRequestError = Exception
 
 from pipeline.channel_presets import ChannelPreset
 from pipeline.story_history import history_prompt_block
@@ -62,6 +68,22 @@ def _clean_json_text(text: str) -> str:
     # Remove trailing commas before closing braces/brackets
     text = re.sub(r",\s*([\}\]])", r"\1", text)
     return text
+
+
+EMOJI_PATTERN = re.compile(
+    r"[\U00010000-\U0010ffff\u2600-\u27bf\u2300-\u23ff\u2b50-\u2b55\ufe00-\ufe0f\u200d]+",
+    flags=re.UNICODE,
+)
+
+
+def sanitize_narration(text: str) -> str:
+    """Strip emojis, markdown formatting, brackets, and sound cues that break TTS."""
+    clean = EMOJI_PATTERN.sub("", text)
+    # Remove bracketed stage directions or sound notes like [screams] or (pause)
+    clean = re.sub(r"\[.*?\]|\(.*?\)", "", clean)
+    # Remove markdown formatting characters
+    clean = re.sub(r"[*_#~`]", "", clean)
+    return " ".join(clean.split())
 
 
 def _parse_json_safely(raw: str) -> dict[str, Any]:
@@ -154,9 +176,9 @@ def _generate_single(preset: ChannelPreset, user: str, n: int) -> dict[str, Any]
     user += f"""
 Return ONLY valid JSON with this shape:
 {{
-  "youtube_title": "catchy title under 55 characters with 1-2 relevant emojis (no hashtags)",
-  "youtube_description": "2-3 sentences plus optional #Shorts at end",
-  "pinned_comment": "engaging open-ended question (under 200 characters) to pin in the comments to drive discussion",
+  "youtube_title": "high-CTR curiosity-gap title under 55 characters (e.g. warning, impossible mystery, or first-person eerie encounter) with 1 relevant emoji (no hashtags)",
+  "youtube_description": "2-3 suspenseful sentences setting the stage + #Shorts",
+  "pinned_comment": "a provocative open-ended question (under 160 characters) asking viewers what they would do in this exact situation to spark comments",
   {narration_rule},
   "image_prompts": [
     "visual description for image 1: setting, subject, action. No style words. No text in image.",
@@ -172,7 +194,8 @@ STRICT RULES:
 - The narration must flow naturally as one spoken piece (no "segment 1", "segment 2" etc).
 - The FIRST sentence must be a hard hook: a direct question, a disturbing claim, or a curiosity gap.
 - Reveal the climax or key mystery only near the final third; do not explain everything too early.
-- The LAST sentence should invite comments or follows in a natural channel voice, without hashtags.
+- The LAST sentence must deliver the final chilling punchline or loop cleanly into sentence 1. NEVER include outro phrases like 'subscribe', 'follow for more', or 'like this video'.
+- ZERO EMOJIS: full_narration must contain ABSOLUTELY ZERO emojis, zero symbols, and zero stage directions (like [laughter] or *whispers*). Emojis cause speech synthesis errors. Plain spoken words only.
 """
 
     max_attempts = 3
@@ -190,7 +213,8 @@ STRICT RULES:
         data = _call_groq(preset, user + extra, temperature=temp)
 
         try:
-            narration = data.get("full_narration", "").strip()
+            narration = sanitize_narration(data.get("full_narration", ""))
+            data["full_narration"] = narration
             if not narration:
                 raise ValueError("Missing full_narration")
 
@@ -312,7 +336,8 @@ def _assert_multivariant_valid(data: dict[str, Any], variants: list, n: int) -> 
         if not isinstance(node, dict):
             raise ValueError(f"variants['{lang}'] missing")
 
-        narration = (node.get("full_narration") or "").strip()
+        node["full_narration"] = sanitize_narration(node.get("full_narration") or "")
+        narration = node["full_narration"]
         if not narration:
             raise ValueError(f"variants['{lang}'].full_narration empty")
 
@@ -335,13 +360,6 @@ def _call_groq(
     *,
     temperature: float = 0.85,
 ) -> dict[str, Any]:
-    api_key = os.environ.get("GROQ_API_KEY", "").strip()
-    if not api_key:
-        raise RuntimeError("GROQ_API_KEY environment variable is not set or is empty.")
-
-    client = Groq(api_key=api_key)
-    model = os.environ.get("GROQ_MODEL", GROQ_MODEL).strip() or GROQ_MODEL
-
     system_prompt = preset["groq_system_hint"]
     if "JSON" not in system_prompt:
         system_prompt = (
@@ -353,6 +371,67 @@ def _call_groq(
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user},
     ]
+
+    # --- Mode A: Primary LLM (OpenAI / ChatAnywhere e.g. gpt-4o-mini) ---
+    openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if openai_key and "your_" not in openai_key:
+        base_url = (os.environ.get("OPENAI_BASE_URL", "") or "https://api.chatanywhere.org/v1").rstrip("/")
+        if not base_url.endswith("/v1"):
+            base_url = f"{base_url}/v1"
+        model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
+
+        headers = {
+            "Authorization": f"Bearer {openai_key}",
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0",
+        }
+        payload = {
+            "model": model,
+            "messages": messages,
+            "response_format": {"type": "json_object"},
+            "temperature": temperature,
+        }
+
+        try:
+            print(f"   🤖 Trying primary LLM: {model} ({base_url})...")
+            with httpx.Client(timeout=60.0) as client:
+                resp = client.post(f"{base_url}/chat/completions", json=payload, headers=headers)
+                if resp.status_code in (402, 429):
+                    raise RuntimeError(f"Quota/Rate limit exhausted (HTTP {resp.status_code}): {resp.text[:120]}")
+                if resp.status_code != 200:
+                    # Retry without response_format in case proxy doesn't support json_object
+                    payload.pop("response_format", None)
+                    resp = client.post(f"{base_url}/chat/completions", json=payload, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+                raw = data["choices"][0]["message"]["content"]
+                result = _parse_json_safely(raw)
+                print(f"   ✅ Primary LLM ({model}) generated script successfully.")
+                return result
+        except Exception as e:
+            groq_key = os.environ.get("GROQ_API_KEY", "").strip()
+            if groq_key:
+                print(f"   ⚠️ Primary LLM ({model}) failed or quota exhausted: {e}")
+                print("   🔄 Falling back to Groq Cloud...")
+            else:
+                raise RuntimeError(
+                    f"Primary LLM ({model}) failed: {e}\n"
+                    "Note: GROQ_API_KEY is not set in .env to use as a fallback."
+                ) from e
+
+    # --- Mode B: Groq API (Fallback or standalone) ---
+    api_key = os.environ.get("GROQ_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError(
+            "Neither OPENAI_API_KEY nor GROQ_API_KEY is set. "
+            "Please add your API key to YT_Bot/.env."
+        )
+
+    if Groq is None:
+        raise RuntimeError("groq package not installed. Run: pip install groq (or set OPENAI_API_KEY in .env)")
+
+    client = Groq(api_key=api_key)
+    model = os.environ.get("GROQ_MODEL", GROQ_MODEL).strip() or GROQ_MODEL
 
     is_reasoning_model = any(
         kw in model.lower()

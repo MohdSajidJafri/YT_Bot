@@ -80,8 +80,8 @@ def render_vertical_short(
             [
                 "ffmpeg", "-y", "-hide_banner", "-loglevel", "warning",
                 "-i", str(src),
-                "-vf", (f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
-                        f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black"),
+                "-vf", (f"scale={width}:{height}:force_original_aspect_ratio=increase,"
+                        f"crop={width}:{height}"),
                 "-update", "1", "-frames:v", "1",
                 str(dst),
             ],
@@ -260,7 +260,7 @@ def render_vertical_short(
 
     audio_map = f"{n}:a"
     if bg_music_idx is not None:
-        filter_parts.append(f"[{bg_music_idx}:a]volume=0.08[bg]")
+        filter_parts.append(f"[{bg_music_idx}:a]volume=0.12[bg]")
         filter_parts.append(f"[{n}:a][bg]amix=inputs=2:duration=first:dropout_transition=2[mixed_audio]")
         audio_map = "[mixed_audio]"
 

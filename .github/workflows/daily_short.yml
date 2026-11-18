@@ -102,12 +102,15 @@ jobs:
 
       - name: Generate, render & upload Short
         env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL || 'https://api.chatanywhere.org/v1' }}
+          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL || 'gpt-4o-mini' }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GROQ_MODEL: "openai/gpt-oss-20b"
           DEAPI_TOKEN: ${{ secrets.DEAPI_TOKEN }}
           DEAPI_MODEL: "Flux_2_Klein_4B_BF16"
           DEAPI_IMAGE_WIDTH: 768
-          DEAPI_IMAGE_HEIGHT: 768
+          DEAPI_IMAGE_HEIGHT: 1360
           DEAPI_COOLDOWN: 10
           EDGE_TTS_VOICE: ${{ secrets.EDGE_TTS_VOICE || 'en-US-ChristopherNeural' }}
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
