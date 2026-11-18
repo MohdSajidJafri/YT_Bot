@@ -71,14 +71,22 @@ def _clean_json_text(text: str) -> str:
 
 
 EMOJI_PATTERN = re.compile(
-    r"[\U00010000-\U0010ffff\u2600-\u27bf\u2300-\u23ff\u2b50-\u2b55\ufe00-\ufe0f\u200d]+",
+    r"[\U00010000-\U0010ffff\u2600-\u27bf\u2300-\u23ff\u2b50-\u2b55\ufe00-\ufe0f\u200d\u20e3]+",
     flags=re.UNICODE,
 )
 
 
+def strip_emojis(text: str) -> str:
+    """Completely eliminate emojis and decorative symbols from any text."""
+    if not text:
+        return ""
+    clean = EMOJI_PATTERN.sub("", str(text))
+    return " ".join(clean.split())
+
+
 def sanitize_narration(text: str) -> str:
     """Strip emojis, markdown formatting, brackets, and sound cues that break TTS."""
-    clean = EMOJI_PATTERN.sub("", text)
+    clean = strip_emojis(text)
     # Remove bracketed stage directions or sound notes like [screams] or (pause)
     clean = re.sub(r"\[.*?\]|\(.*?\)", "", clean)
     # Remove markdown formatting characters
@@ -176,11 +184,11 @@ def _generate_single(preset: ChannelPreset, user: str, n: int) -> dict[str, Any]
     user += f"""
 Return ONLY valid JSON with this shape:
 {{
-  "youtube_title": "high-CTR curiosity-gap title under 55 characters (e.g. warning, impossible mystery, or first-person eerie encounter) with 1 relevant emoji (no hashtags)",
-  "youtube_description": "2-3 suspenseful sentences setting the stage + #Shorts",
-  "opening_hook": "first sentence / hook of the story (under 15 words)",
-  "ending_bridge": "ending phrase with NO trailing period (under 15 words) that connects grammatically into opening_hook",
-  "pinned_comment": "a provocative open-ended question (under 160 characters) asking viewers what they would do in this exact situation to spark comments",
+  "youtube_title": "high-CTR curiosity-gap title under 55 characters (NO emojis, NO hashtags)",
+  "youtube_description": "2-3 suspenseful sentences setting the stage (NO emojis) + #Shorts",
+  "opening_hook": "first sentence / hook of the story (under 15 words, NO emojis)",
+  "ending_bridge": "ending phrase with NO trailing period (under 15 words, NO emojis) that connects grammatically into opening_hook",
+  "pinned_comment": "a provocative open-ended question (under 160 characters, NO emojis) asking viewers what they would do in this exact situation to spark comments",
   {narration_rule},
   "image_prompts": [
     "visual description for image 1: setting, subject, action. No style words. No text in image.",
@@ -197,7 +205,7 @@ STRICT RULES:
 - The FIRST sentence must be a hard hook: a direct question, a disturbing claim, or a curiosity gap.
 - Reveal the climax or key mystery only near the final third; do not explain everything too early.
 - SEAMLESS INFINITE LOOP: full_narration must start with opening_hook and conclude with ending_bridge (NO period at the very end). The phrase ending_bridge + opening_hook must form a complete, natural sentence so the video loops endlessly without the viewer noticing where it ended.
-- ZERO EMOJIS: full_narration must contain ABSOLUTELY ZERO emojis, zero symbols, and zero stage directions (like [laughter] or *whispers*). Emojis cause speech synthesis errors. Plain spoken words only.
+- ZERO EMOJIS MANDATE: ABSOLUTELY ZERO emojis anywhere in the response. Zero emojis in title, description, pinned comment, or narration. Standard punctuation and plain text only.
 """
 
     max_attempts = 3
@@ -219,6 +227,13 @@ STRICT RULES:
             if preset.get("id") == "ghost_stories":
                 narration = narration.rstrip(".!? ")
             data["full_narration"] = narration
+            data["youtube_title"] = strip_emojis(data.get("youtube_title", ""))
+            data["youtube_description"] = strip_emojis(data.get("youtube_description", ""))
+            data["pinned_comment"] = strip_emojis(data.get("pinned_comment", ""))
+            if "opening_hook" in data:
+                data["opening_hook"] = strip_emojis(data["opening_hook"])
+            if "ending_bridge" in data:
+                data["ending_bridge"] = strip_emojis(data["ending_bridge"])
             if not narration:
                 raise ValueError("Missing full_narration")
 
@@ -259,9 +274,9 @@ def _generate_multivariant(
         lo, hi, blurb = LANG_WORD_TARGETS.get(lang, LANG_WORD_TARGETS["en"])
         lang_lines.append(
             f'    "{lang}": {{\n'
-            f'      "youtube_title": "catchy title under 55 characters in {_lang_label(lang)} with 1-2 relevant emojis (no hashtags)",\n'
-            f'      "youtube_description": "2-3 sentences in {_lang_label(lang)} + optional #Shorts",\n'
-            f'      "pinned_comment": "creepy or engaging open-ended question (under 200 characters) in {_lang_label(lang)} to pin in comments",\n'
+            f'      "youtube_title": "catchy title under 55 characters in {_lang_label(lang)} (NO emojis, NO hashtags)",\n'
+            f'      "youtube_description": "2-3 sentences in {_lang_label(lang)} + optional #Shorts (NO emojis)",\n'
+            f'      "pinned_comment": "creepy or engaging open-ended question (under 200 characters, NO emojis) in {_lang_label(lang)} to pin in comments",\n'
             f'      "full_narration": "ONE continuous paragraph in {_lang_label(lang)}. '
             f'{blurb}. Natural spoken narration, no segment markers."\n'
             f'    }}'
@@ -341,6 +356,9 @@ def _assert_multivariant_valid(data: dict[str, Any], variants: list, n: int) -> 
             raise ValueError(f"variants['{lang}'] missing")
 
         node["full_narration"] = sanitize_narration(node.get("full_narration") or "")
+        node["youtube_title"] = strip_emojis(node.get("youtube_title") or "")
+        node["youtube_description"] = strip_emojis(node.get("youtube_description") or "")
+        node["pinned_comment"] = strip_emojis(node.get("pinned_comment") or "")
         narration = node["full_narration"]
         if not narration:
             raise ValueError(f"variants['{lang}'].full_narration empty")

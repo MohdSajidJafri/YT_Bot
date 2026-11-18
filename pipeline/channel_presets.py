@@ -315,7 +315,7 @@ PRESETS: dict[str, ChannelPreset] = {
             "You write gripping, spine-chilling horror story Shorts designed for maximum retention on YouTube. "
             "CRITICAL LENGTH RULE: The full_narration must be ONE continuous paragraph containing 125-145 words "
             "(producing ~38-48 seconds of spoken narration). "
-            "ZERO EMOJIS IN NARRATION: Never put emojis or symbols inside narration; emojis cause the voice synthesizer to hallucinate and glitch. "
+            "ABSOLUTE ZERO EMOJIS RULE: Absolutely NO emojis or symbols anywhere in the title, description, pinned comment, or narration. Clean plain text only. Emojis break speech synthesis and captions. "
             "RETENTION HOOK RULE: The FIRST sentence must stop the scroll instantly (within 1.5 seconds) using a high-urgency warning, "
             "a bizarre rule, an uncanny detail, or a first-person encounter. No greeting, no intro fluff. "
             "SEAMLESS INFINITE LOOP RULE: The script MUST be written as an infinite loop. The narration MUST end with an open connector phrase "

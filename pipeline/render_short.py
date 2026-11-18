@@ -11,6 +11,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from pipeline.captions import strip_emojis
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FONTS_DIR = REPO_ROOT / "assets" / "fonts"
 DEFAULT_FONT_FILE = "CreepsterCaps.ttf"
@@ -25,9 +27,10 @@ CTA_OVERLAY_SECONDS = 2.2
 
 
 def _escape_drawtext_text(text: str) -> str:
-    """Escape user/model text for FFmpeg drawtext filter values."""
+    """Escape user/model text for FFmpeg drawtext filter values, ensuring no emojis."""
+    clean = strip_emojis(text)
     return (
-        text.replace("\\", "\\\\")
+        clean.replace("\\", "\\\\")
         .replace(":", "\\:")
         .replace("'", "'\\''")
         .replace("%", "\\%")
@@ -37,7 +40,7 @@ def _escape_drawtext_text(text: str) -> str:
 
 
 def _compact_overlay_text(text: str, max_chars: int) -> str:
-    text = " ".join(text.split())
+    text = strip_emojis(" ".join(text.split()))
     if len(text) <= max_chars:
         return text
     return text[: max_chars - 1].rstrip() + "..."

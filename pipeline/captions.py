@@ -13,6 +13,20 @@ if TYPE_CHECKING:
     from pipeline.edge_tts_synth import SentenceTiming
 
 
+EMOJI_PATTERN = re.compile(
+    r"[\U00010000-\U0010ffff\u2600-\u27bf\u2300-\u23ff\u2b50-\u2b55\ufe00-\ufe0f\u200d\u20e3]+",
+    flags=re.UNICODE,
+)
+
+
+def strip_emojis(text: str) -> str:
+    """Remove all emojis and decorative symbols."""
+    if not text:
+        return ""
+    clean = EMOJI_PATTERN.sub("", str(text))
+    return " ".join(clean.split())
+
+
 def _fmt_srt(ms: int) -> str:
     """Milliseconds -> SRT timestamp (00:00:00,000)."""
     h = ms // 3_600_000
@@ -72,14 +86,16 @@ def _split_into_chunks(
             if len(curr) >= max_words_per_line or is_punct:
                 s = curr[0]["offset_ms"]
                 e = curr[-1]["offset_ms"] + curr[-1]["duration_ms"]
-                t = " ".join(item["text"].strip() for item in curr)
-                chunks.append((s, e, t))
+                t = strip_emojis(" ".join(item["text"].strip() for item in curr))
+                if t:
+                    chunks.append((s, e, t))
                 curr = []
         if curr:
             s = curr[0]["offset_ms"]
             e = curr[-1]["offset_ms"] + curr[-1]["duration_ms"]
-            t = " ".join(item["text"].strip() for item in curr)
-            chunks.append((s, e, t))
+            t = strip_emojis(" ".join(item["text"].strip() for item in curr))
+            if t:
+                chunks.append((s, e, t))
         return chunks
 
     # Fallback path: SentenceBoundary cues (evenly distributed)
@@ -92,7 +108,9 @@ def _split_into_chunks(
         dur_ms = sent["duration_ms"]
 
         if len(words) <= max_words_per_line:
-            chunks.append((start_ms, start_ms + dur_ms, sent["text"]))
+            clean_t = strip_emojis(sent["text"])
+            if clean_t:
+                chunks.append((start_ms, start_ms + dur_ms, clean_t))
         else:
             n_groups = (len(words) + max_words_per_line - 1) // max_words_per_line
             ms_per_word = dur_ms / len(words) if words else 1
@@ -107,7 +125,9 @@ def _split_into_chunks(
                 t_end = start_ms + int(grp_end * ms_per_word)
                 t_end = min(t_end, start_ms + dur_ms)
 
-                chunks.append((t_start, t_end, grp_text))
+                clean_grp = strip_emojis(grp_text)
+                if clean_grp:
+                    chunks.append((t_start, t_end, clean_grp))
                 pos = grp_end
 
     return chunks
@@ -170,10 +190,11 @@ def srt_to_ass(
             if t_match:
                 start_ms = _srt_time_to_ms(t_match.group(1))
                 end_ms = _srt_time_to_ms(t_match.group(2))
-                text = " ".join(lines[2:]).replace("\n", " ").strip()
-                events.append(
-                    f"Dialogue: 0,{_fmt_ass(start_ms)},{_fmt_ass(end_ms)},Default,,0,0,0,,{text}"
-                )
+                text = strip_emojis(" ".join(lines[2:]).replace("\n", " ").strip())
+                if text:
+                    events.append(
+                        f"Dialogue: 0,{_fmt_ass(start_ms)},{_fmt_ass(end_ms)},Default,,0,0,0,,{text}"
+                    )
 
     ass_header = f"""[Script Info]
 ScriptType: v4.00+
